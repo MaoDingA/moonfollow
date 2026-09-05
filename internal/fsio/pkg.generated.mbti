@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "phenom8010/moonfollow/internal/fsio"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn read_bytes(String) -> Bytes raise FsError
+
+pub fn read_string(String) -> String raise FsError
+
+pub fn write_bytes(String, Bytes) -> Unit raise FsError
+
+pub fn write_string(String, String) -> Unit raise FsError
+
+// Errors
+pub(all) suberror FsError {
+  IoFailed(path~ : String, errno~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for FsError
+
+// Types and methods
+
+// Type aliases
+
+// Traits

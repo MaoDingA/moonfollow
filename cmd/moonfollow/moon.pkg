@@ -1,1 +1,14 @@
+import {
+  "moonbitlang/core/argparse",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/strconv",
+  "phenom8010/moonfollow/internal/fsio",
+  "phenom8010/moonfollow/placement",
+  "phenom8010/moonfollow/steps",
+  "phenom8010/moonfollow/timecode",
+  "phenom8010/moonfollow/track",
+  "phenom8010/moonfollow/wav",
+}
+
 pkgtype(kind: "executable")

@@ -1,7 +1,14 @@
 ///|
 /// moonfollow: footstep landings -> SMPTE timecodes -> synced SFX track.
 /// Run with `moon run cmd/moonfollow -- <subcommand> ...` from the project root.
-fn main {
-  println("moonfollow 0.1.0")
-  println("subcommands: steps | render | run (see README)")
+fn main raise {
+  let root = build_command()
+  let args = @env.args()
+  let matches = root.parse(argv=args[1:])
+  match matches.subcommand {
+    Some(("steps", m)) => run_steps(m)
+    Some(("render", m)) => run_render(m)
+    Some(("run", m)) => run_pipeline(m)
+    _ => println(root.render_help())
+  }
 }
