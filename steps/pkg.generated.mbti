@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "phenom8010/moonfollow/steps"
+
+import {
+  "moonbitlang/core/debug",
+  "phenom8010/moonfollow/track",
+}
+
+// Values
+pub fn detect(@track.FootTrack, min_visibility? : Double, window? : Int, min_prominence? : Double, min_interval_s? : Double, full_stride? : Double) -> Array[StepEvent]
+
+// Errors
+
+// Types and methods
+pub(all) enum FootSide {
+  Left
+  Right
+} derive(Eq, ToJson, @debug.Debug)
+
+pub(all) struct StepEvent {
+  frame : Int
+  time : Double
+  foot : FootSide
+  strength : Double
+} derive(Eq, ToJson, @debug.Debug)
+
+// Type aliases
+
+// Traits
