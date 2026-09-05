@@ -47,7 +47,7 @@ test "feet: swing lifts the foot, stance keeps it down" {
   let det = detector_after_warmup()
   // right foot swings up 6 px (still inside the bottom region), left planted
   let (left1, _) = det.process_frame(walker_frame(88, 82))
-  let (_, right1) = det.process_frame(walker_frame(88, 82))
+  ignore(det.process_frame(walker_frame(88, 82)))
   let (left2, right2) = det.process_frame(walker_frame(88, 82))
   // planted foot is unchanged, swung foot is higher
   inspect(left2.y > left1.y - 0.001, content="true")
