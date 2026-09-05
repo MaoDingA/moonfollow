@@ -1,0 +1,44 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "phenom8010/moonfollow/track"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+
+// Errors
+pub(all) suberror TrackError {
+  BadJson(detail~ : String)
+  InvalidTrack(detail~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for TrackError
+
+// Types and methods
+pub(all) struct FootTrack {
+  video : String
+  fps : Double
+  n_frames : Int
+  width : Int
+  height : Int
+  frames : Array[FrameRecord]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn FootTrack::parse(String) -> Self raise TrackError
+
+pub(all) struct FrameRecord {
+  i : Int
+  t : Double
+  left : KeyPoint
+  right : KeyPoint
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct KeyPoint {
+  x : Double
+  y : Double
+  v : Double
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+// Type aliases
+
+// Traits
