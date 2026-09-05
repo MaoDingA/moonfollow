@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "phenom8010/moonfollow/placement"
+
+import {
+  "phenom8010/moonfollow/steps",
+  "phenom8010/moonfollow/wav",
+}
+
+// Values
+pub fn mix(Array[@steps.StepEvent], @wav.WavData, Double, sample_rate? : Int, base_gain? : Double, strength_to_gain? : Bool, normalize? : Bool, target_peak? : Double) -> @wav.WavData
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
