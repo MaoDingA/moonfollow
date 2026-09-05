@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "phenom8010/moonfollow/wav"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror WavError {
+  NotWav(detail~ : String)
+  UnsupportedFormat(detail~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for WavError
+
+// Types and methods
+pub(all) struct WavData {
+  sample_rate : Int
+  channels : Int
+  samples : Array[Double]
+} derive(Eq, @debug.Debug)
+pub fn WavData::encode_pcm16(Self) -> Bytes
+pub fn WavData::parse(Bytes) -> Self raise WavError
+
+// Type aliases
+
+// Traits
