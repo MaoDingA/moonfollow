@@ -32,10 +32,10 @@ test "triangular walk: landings at the peaks, feet interleaved" {
   // left foot: frames 8, 33, 58, 83, 108
   let left = events.filter(e => e.foot is Left)
   let left_frames = left.map(e => e.frame)
-  inspect(left_frames, content="[8, 33, 58, 83, 108]")
+  debug_inspect(left_frames, content="[8, 33, 58, 83, 108]")
   // right foot: frames 21, 46, 71, 96, 121
   let right = events.filter(e => e.foot is Right)
-  inspect(right.map(e => e.frame), content="[21, 46, 71, 96, 121]")
+  debug_inspect(right.map(e => e.frame), content="[21, 46, 71, 96, 121]")
   // merged output is time-sorted and alternates feet
   inspect(events[0].time.to_string(), content="0.32")
   inspect(events[1].time.to_string(), content="0.84")
