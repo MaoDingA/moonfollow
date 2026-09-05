@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "phenom8010/moonfollow/vision"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+  "phenom8010/moonfollow/internal/fsio",
+  "phenom8010/moonfollow/track",
+}
+
+// Values
+pub fn detect_track(String, width? : Int) -> @track.FootTrack raise VisionError
+
+pub fn probe(String) -> VideoInfo raise VisionError
+
+// Errors
+pub(all) suberror VisionError {
+  ToolMissing(tool~ : String)
+  ProbeFailed(path~ : String, status~ : Int)
+  NoVideoStream(path~ : String)
+  VariableFrameRate(rate~ : Double, avg~ : Double)
+  DecodeFailed(status~ : Int)
+} derive(Eq, @debug.Debug)
+pub impl Show for VisionError
+
+// Types and methods
+pub(all) struct FeetDetector {
+  width : Int
+  height : Int
+  bg : FixedArray[Double]
+  mut frames_seen : Int
+  mut mid_x : Int
+}
+pub fn FeetDetector::new(Int, Int) -> Self
+pub fn FeetDetector::process_frame(Self, Bytes) -> (@track.KeyPoint, @track.KeyPoint)
+
+pub(all) struct FrameReader {
+  proc : @fsio.Proc
+  width : Int
+  height : Int
+  mut cur : Bytes
+  mut pos : Int
+}
+pub fn FrameReader::finish(Self) -> Unit raise VisionError
+pub fn FrameReader::next_frame(Self) -> Bytes?
+pub fn FrameReader::open(String, src_width~ : Int, src_height~ : Int, width? : Int) -> Self raise VisionError
+
+type ProbeJson derive(@json.FromJson)
+
+type StreamJson derive(@json.FromJson)
+
+pub(all) struct VideoInfo {
+  width : Int
+  height : Int
+  fps : Double
+  nb_frames : Int?
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

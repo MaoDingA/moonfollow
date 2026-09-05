@@ -1,8 +1,9 @@
 import {
+  "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
 }
 
 options(
   "native-stub": [ "stub.c" ],
-  targets: { "ffi.mbt": [ "native" ] },
+  targets: { "ffi.mbt": [ "native" ], "proc.mbt": [ "native" ] },
 )

@@ -25,9 +25,11 @@ pub(all) struct StepEvent {
 /// For each foot independently:
 ///
 /// 1. frames with visibility below `min_visibility` are ignored;
-/// 2. a frame is a candidate when its y is a strict local maximum: both
-///    adjacent visible frames must be strictly lower (so the first and last
-///    frame of the track can never be a landing);
+/// 2. a frame is a candidate when y rises into it and nothing higher
+///    follows within `window` frames: a landing is the start of the ground
+///    plateau (the foot rests there for several frames), while quantised
+///    steps on a rising edge always have higher frames ahead (the first and
+///    last frame of the track can never be a landing);
 /// 3. the candidate's prominence (peak y minus the minimum over the
 ///    +-`window` visible neighbourhood) must reach `min_prominence`;
 /// 4. candidates closer than `min_interval_s` on the same foot are
@@ -38,7 +40,7 @@ pub fn detect(
   track : @track.FootTrack,
   min_visibility? : Double = 0.5,
   window? : Int = 0,
-  min_prominence? : Double = 0.01,
+  min_prominence? : Double = 0.02,
   min_interval_s? : Double = 0.2,
   full_stride? : Double = 0.1,
 ) -> Array[StepEvent] {
@@ -111,7 +113,14 @@ fn detect_side(
   for i in 1..<(n - 1) {
     guard ys[i] is Some(peak) else { continue }
     guard ys[i - 1] is Some(before) && before < peak else { continue }
-    guard ys[i + 1] is Some(after) && after < peak else { continue }
+    let look_end = if i + w < n - 1 { i + w } else { n - 1 }
+    let mut rising_ahead = false
+    for j in (i + 1)..<=look_end {
+      guard ys[j] is Some(y) && y > peak else { continue }
+      rising_ahead = true
+      break
+    }
+    guard !rising_ahead else { continue }
     // prominence against the wider neighbourhood
     let mut neighborhood_min = peak
     for j in (i - w)..<=(i + w) {

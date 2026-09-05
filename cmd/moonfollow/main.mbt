@@ -6,6 +6,7 @@ fn main raise {
   let args = @env.args()
   let matches = root.parse(argv=args[1:])
   match matches.subcommand {
+    Some(("detect", m)) => run_detect(m)
     Some(("steps", m)) => run_steps(m)
     Some(("render", m)) => run_render(m)
     Some(("run", m)) => run_pipeline(m)

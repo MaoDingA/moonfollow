@@ -8,6 +8,7 @@ import {
   "phenom8010/moonfollow/steps",
   "phenom8010/moonfollow/timecode",
   "phenom8010/moonfollow/track",
+  "phenom8010/moonfollow/vision",
   "phenom8010/moonfollow/wav",
 }
 

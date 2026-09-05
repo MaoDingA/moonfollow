@@ -2,108 +2,88 @@
 
 根据画面中脚步的落点推算 SMPTE 时码，再把脚步声音效按这些时码合成为一条与视频同步的音轨。
 
+**项目代码 100% MoonBit**（native 后端）：从视频解码、足部跟踪、落点检测、
+时码换算到音频混音全部在 MoonBit 里实现。唯一的非 MoonBit 内容是
+MoonBit 官方 native FFI 约定所需的少量 C 胶水（`internal/fsio/stub.c`，
+文件读写与子进程管道）；外部工具只依赖系统安装的 `ffmpeg`/`ffprobe`
+二进制（视频解码与容器探测，属于运行环境而非项目代码）。
+
 ```
-video.mp4 --detect/foottrack.py--> foottrack.json
-foottrack.json --moonfollow CLI--> 落点时码列表 (steps JSON)
-steps JSON + 脚步声 WAV --moonfollow CLI--> footsteps.wav（拖进 Resolve 对齐片头即同步）
+video.mp4 --[detect]--> foottrack.json --[steps]--> 落点时码列表
+                                              +-- [render] --> footsteps.wav
 ```
 
-项目用 [MoonBit](https://www.moonbitlang.com) 实现（native 后端），核心逻辑全部在 MoonBit 里：
-姿态检测是唯一的外部环节（Python + MediaPipe，只产出关键点数据）。
+输出的 `footsteps.wav` 拖进 DaVinci Resolve / 任何 NLE，与源片对齐片头即同步。
+
+## 快速体验
+
+```sh
+sh examples/demo.sh          # 自包含演示：ffmpeg 合成行走视频 + 脚步声，跑通全流程
+```
 
 ## 使用
 
-### 1. 提取足部轨迹（需要 Python）
-
 ```sh
-pip install -r detect/requirements.txt   # mediapipe, opencv-python
-python3 detect/foottrack.py clip.mp4 -o foottrack.json
-python3 detect/foottrack.py clip.mp4 --probe-only   # 只看容器信息/CFR 校验
-```
+# 1) 从视频提取足部轨迹（ffprobe 做 CFR 校验，ffmpeg 解码低分辨率灰度帧）
+moon run cmd/moonfollow -- detect clip.mp4 -o foottrack.json
 
-脚本用 ffprobe 拒绝可变帧率（VFR）素材（VFR 下帧级时码无意义，先
-`ffmpeg -i in.mp4 -vsync cfr -r 25 out.mp4` 转恒定帧率）。
-
-### 2. 检测落点 + 合成音轨
-
-```sh
-# 一步到位：检测落点并渲染音效轨
+# 2) 检测落点 + 渲染音效轨（一步到位）
 moon run cmd/moonfollow -- run foottrack.json --sfx step.wav -o footsteps.wav
 
-# 或分两步：先看时码列表（可人工核对/修剪），再渲染
+# 或分步：先核对时码（可修剪 steps.json），再渲染
 moon run cmd/moonfollow -- steps foottrack.json -o steps.json
-moon run cmd/moonfollow -- render steps.json --sfx step.wav -o footsteps.wav --rate 48000
+moon run cmd/moonfollow -- render steps.json --sfx step.wav -o footsteps.wav
 ```
 
-`run`/`steps` 会打印每个落点的时码、左右脚、强度与帧号：
+`run`/`steps` 打印每个落点的时码、左右脚、强度与帧号：
 
 ```text
-clip.mp4: 10 steps at 29.97 fps (drop-frame)
-00:00:00;08  left   strength 0.48  frame 8
-00:00:00;21  right  strength 0.48  frame 21
+clip.mp4: 9 steps at 25 fps
+00:00:00:20  right  strength 1  frame 20
+00:00:01:07  left   strength 1  frame 32
 ```
 
 29.97/59.94 fps 的素材自动使用 drop-frame 时码（`;` 分隔），25/24/30 等
-整帧率使用非丢帧格式（`:` 分隔）。
+整帧率使用非丢帧格式（`:` 分隔）。输出为 16-bit PCM、默认 48 kHz、与
+视频等长的音轨（末尾音效不截断，音轨可能略长于 `--duration`）。
 
-输出的 `footsteps.wav` 为 16-bit PCM、默认 48 kHz，与视频等长（末尾
-音效不会被截断，音轨可能略长于 `--duration`）。直接拖进
-DaVinci Resolve 等时间线，与源片对齐片头即可同步。
+## 算法（全部 MoonBit 实现）
 
-## 数据格式
+- **vision/**：ffprobe 探测并拒绝可变帧率 → ffmpeg 解码为小尺寸灰度帧
+  （默认 320px 宽，位置只需归一化坐标）→ **像素级时序最小值背景模型**
+  （缓慢回升；触地驻留的脚不会污染背景——这正是滑动平均背景的经典败点）
+  → 前景行/列直方图求人物框 → 底部三分之一区域内**按最大横向间隙分脚**，
+  每只脚取其最低前景行，前景支撑密度作为可见度。
+- **steps/**：落点 = "y 上升进入该帧，且未来 window 帧内无更高值"——
+  即触地平台期的起始帧（脚落地后会驻留数帧，平台期是落点的本质特征；
+  行量化上升沿的台阶则总有更高帧在后）。配 ±window 显著性过滤与同脚
+  0.2 s 去抖。
+- **timecode/**：帧号 × 有理帧率（30000/1001 等）换算 SMPTE；drop-frame
+  按标准规则在非整分跳过帧编号。
+- **placement/ + wav/**：纯 MoonBit 采样级混音；SFX 线性插值重采样、
+  落地强度映射增益（下限 0.35）、峰值超过 0.9 时整体向下归一。
 
-`foottrack.json`（检测脚本产出，坐标归一化 [0,1]，y 向下）：
+## 已知边界（v0.1）
 
-```json
-{
-  "video": "clip.mp4", "fps": 25.0, "n_frames": 125, "width": 1920, "height": 1080,
-  "frames": [
-    { "i": 0, "t": 0.0,
-      "left":  { "x": 0.40, "y": 0.85, "v": 0.9 },
-      "right": { "x": 0.60, "y": 0.78, "v": 0.8 } }
-  ]
-}
-```
-
-`steps.json`（`moonfollow steps -o` 产出，`render` 的输入）：
-
-```json
-{
-  "video": "clip.mp4", "fps": 25.0, "duration_s": 5.0,
-  "events": [
-    { "frame": 8, "time": 0.32, "foot": "left", "strength": 0.48, "timecode": "00:00:00:08" }
-  ]
-}
-```
-
-## 算法要点
-
-- **落点判定**（`steps/`）：画面 y 向下，脚触地即 y 的局部极大。候选 =
-  两侧相邻可见帧都严格更低的严格局部极大；再用 ±window 邻域显著性
-  （峰值 − 谷值）过滤抖动，同脚 0.2 s 内去抖（保留强者）。
-- **时码**（`timecode/`）：帧号 × 有理帧率（如 30000/1001）换算 SMPTE；
-  drop-frame 按标准规则在非整分跳过 00/01 帧编号。
-- **混音**（`placement/` + `wav/`）：纯 MoonBit 采样级叠加，SFX 线性插值
-  重采样到输出采样率，落地强度映射到增益（下限 0.35），整体峰值超过
-  0.9 时向下归一。
+- 单人素材；固定或缓慢移动的机位；行人需比背景亮（暗人亮景暂不支持）。
+- 开头约 0.3 s（背景暖机）内的落点不检测。
+- WAV 输入仅支持未压缩 PCM 16/24-bit。
+- 后续项：亚帧插值、暗色行人极性、ffmpeg 直接合成视频、Resolve XML 导出。
 
 ## 开发
 
 ```sh
 moon check            # 快速类型检查
-moon test             # 24 个黑盒快照测试
+moon test             # 27 个黑盒快照测试
 moon fmt && moon info # 提交前格式化并刷新 .mbti 接口
 ```
 
-包结构：`timecode/`（SMPTE 数学）、`track/`（轨迹解析）、`steps/`（落点
-检测）、`wav/`（RIFF 编解码）、`placement/`（混音）、`internal/fsio/`
-（native FFI 文件读写）、`cmd/moonfollow/`（CLI）。
+包结构：`vision/`（解码 + 足部跟踪）、`timecode/`（SMPTE 数学）、`track/`
+（轨迹模型）、`steps/`（落点检测）、`wav/`（RIFF 编解码）、`placement/`
+（混音）、`internal/fsio/`（native FFI：文件 IO 与子进程管道）、
+`cmd/moonfollow/`（CLI）。
 
 **规则**：所有 MoonBit 实现代码必须遵循 `.agents/skills/` 下的官方
 MoonBit skills（见 [AGENTS.md](AGENTS.md)）。
 
-## 已知边界（v0.1）
-
-- 单人素材；MediaPipe 脚本未在真实视频上联调（本机未安装依赖）。
-- WAV 输入仅支持未压缩 PCM 16/24-bit；float/compressed 需先转换。
-- 亚帧精度的落点插值、ffmpeg 直接合成视频、Resolve XML 导出为后续项。
+License: Apache-2.0（见 [LICENSE](LICENSE)）

@@ -32,10 +32,14 @@
 
 ## 工程约定（本项目）
 
+- **项目代码必须 100% MoonBit**：所有功能实现（视频解码调度、视觉检测、
+  时码、音频）都在 MoonBit 包里；非 MoonBit 内容仅限官方 FFI 所需的
+  C 胶水（`internal/fsio/stub.c`）与对外部工具二进制（ffmpeg/ffprobe）的调用。
 - 模块 `phenom8010/moonfollow`，`moon.mod` 使用新格式，`preferred_target = "native"`。
 - 每个包目录一个 `moon.pkg`；测试用黑盒 `*_test.mbt` + `inspect`/`debug_inspect` 快照。
 - 代码块以 `///|` 分隔；接口文件 `pkg.generated.mbti` 由 `moon info` 生成，勿手改。
 - 提交前跑 `moon check`、`moon test`、`moon fmt`、`moon info`。
 - CLI 入口 `cmd/moonfollow`（`moon run cmd/moonfollow -- <subcommand>`）；
-  文件 IO 走 `internal/fsio`（native C stub，修改 FFI 时先读 `moonbit-c-binding` skill）。
-- `detect/foottrack.py` 是唯一的非 MoonBit 代码（姿态检测外部环节），不改成 MoonBit。
+  文件 IO 与子进程管道走 `internal/fsio`（native C stub，修改 FFI 时先读
+  `moonbit-c-binding` skill）。
+- 端到端演示见 `examples/demo.sh`（纯 ffmpeg 合成素材，无 Python）。

@@ -119,6 +119,20 @@ fn render_track(
 }
 
 ///|
+fn run_detect(m : @argparse.Matches) -> Unit raise {
+  let path = required_value(m, "video")
+  let out = required_value(m, "output")
+  let width : Int = @strconv.from_str(required_value(m, "width")) catch {
+    _ => fail("invalid --width")
+  }
+  let track = @vision.detect_track(path, width~)
+  @fsio.write_string(out, @json.to_json(track).stringify())
+  println(
+    "wrote \{out}: \{track.n_frames} frames @ \{track.fps} fps, \{track.width}x\{track.height}",
+  )
+}
+
+///|
 fn run_steps(m : @argparse.Matches) -> Unit raise {
   let path = required_value(m, "track")
   let (_, _, _, _, json_text) = load_and_detect(path)

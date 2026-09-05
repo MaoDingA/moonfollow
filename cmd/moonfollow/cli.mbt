@@ -1,5 +1,30 @@
 ///|
 fn build_command() -> @argparse.Command {
+  let detect_cmd = @argparse.Command::Command(
+    "detect",
+    about="extract per-frame foot positions from a video (ffmpeg must be on PATH)",
+    positionals=[
+      @argparse.PositionArg::PositionArg(
+        "video",
+        about="input video, constant frame rate",
+      ),
+    ],
+    options=[
+      @argparse.OptionArg::OptionArg(
+        "output",
+        short='o',
+        long="output",
+        about="write foottrack.json here",
+        required=true,
+      ),
+      @argparse.OptionArg::OptionArg(
+        "width",
+        long="width",
+        about="detection frame width in pixels",
+        default_values=["320"],
+      ),
+    ],
+  )
   let steps_cmd = @argparse.Command::Command(
     "steps",
     about="detect footstep landings and print/write their timecodes",
@@ -89,7 +114,7 @@ fn build_command() -> @argparse.Command {
     "moonfollow",
     about="footstep landings -> SMPTE timecodes -> synced SFX track",
     version="0.1.0",
-    subcommands=[steps_cmd, render_cmd, run_cmd],
+    subcommands=[detect_cmd, steps_cmd, render_cmd, run_cmd],
     arg_required_else_help=true,
     subcommand_required=true,
   )
