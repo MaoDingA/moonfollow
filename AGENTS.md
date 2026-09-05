@@ -29,3 +29,13 @@
 3. **API 拿不准时用 `moon ide` 查询**（见 `moonbit-orientation`），不猜测、不沿用过时语法。
 4. **遇到诊断/编译错误**：按 `moonbit-orientation` 中的 diagnostics-playbook 定位，不盲改。
 5. 更新或新增 skill 时，保持与官方仓库 [moonbitlang/skills](https://github.com/moonbitlang/skills) 同步，不私自改动其内容。
+
+## 工程约定（本项目）
+
+- 模块 `phenom8010/moonfollow`，`moon.mod` 使用新格式，`preferred_target = "native"`。
+- 每个包目录一个 `moon.pkg`；测试用黑盒 `*_test.mbt` + `inspect`/`debug_inspect` 快照。
+- 代码块以 `///|` 分隔；接口文件 `pkg.generated.mbti` 由 `moon info` 生成，勿手改。
+- 提交前跑 `moon check`、`moon test`、`moon fmt`、`moon info`。
+- CLI 入口 `cmd/moonfollow`（`moon run cmd/moonfollow -- <subcommand>`）；
+  文件 IO 走 `internal/fsio`（native C stub，修改 FFI 时先读 `moonbit-c-binding` skill）。
+- `detect/foottrack.py` 是唯一的非 MoonBit 代码（姿态检测外部环节），不改成 MoonBit。
