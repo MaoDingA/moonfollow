@@ -8,7 +8,7 @@ repository = ""
 
 license = "Apache-2.0"
 
-keywords = ["timecode", "audio", "video", "foley", "footsteps"]
+keywords = [ "timecode", "audio", "video", "foley", "footsteps" ]
 
 preferred_target = "native"
 

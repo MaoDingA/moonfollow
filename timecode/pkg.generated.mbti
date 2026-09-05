@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "phenom8010/moonfollow/timecode"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror TimecodeError {
+  UnsupportedRate(fps~ : Double)
+  InvalidTimecode(input~ : String, reason~ : String)
+  NegativeTime(seconds~ : Double)
+} derive(Eq, @debug.Debug)
+pub impl Show for TimecodeError
+
+// Types and methods
+pub(all) struct FrameRate {
+  num : Int
+  den : Int
+  nominal : Int
+  drop : Bool
+  label : String
+} derive(Eq, @debug.Debug)
+pub fn FrameRate::fps23976() -> Self
+pub fn FrameRate::fps24() -> Self
+pub fn FrameRate::fps25() -> Self
+pub fn FrameRate::fps2997() -> Self
+pub fn FrameRate::fps30() -> Self
+pub fn FrameRate::fps50() -> Self
+pub fn FrameRate::fps5994() -> Self
+pub fn FrameRate::fps60() -> Self
+pub fn FrameRate::frames_per_second(Self) -> Double
+pub fn FrameRate::of_double(Double) -> Self raise TimecodeError
+pub impl Show for FrameRate
+
+pub struct Timecode {
+  frames : Int
+  rate : FrameRate
+} derive(Eq, @debug.Debug)
+pub fn Timecode::display(Self) -> String
+pub fn Timecode::frame_index(Self) -> Int
+pub fn Timecode::from_seconds(Double, rate~ : FrameRate) -> Self raise TimecodeError
+pub fn Timecode::make(Int, rate~ : FrameRate) -> Self
+pub fn Timecode::parse(String, rate~ : FrameRate) -> Self raise TimecodeError
+pub fn Timecode::rate(Self) -> FrameRate
+pub fn Timecode::seconds(Self) -> Double
+pub impl Show for Timecode
+
+// Type aliases
+
+// Traits
