@@ -2,15 +2,26 @@
 package "MaoDingA/moonfollow/audio"
 
 import {
+  "MaoDingA/moonfollow/wav",
   "moonbitlang/core/debug",
 }
 
 // Values
 pub fn detect_onsets(Array[Double], Int, channels? : Int, frame_s? : Double, threshold_ratio? : Double, min_gap_s? : Double) -> Array[Onset]
 
+pub fn estimate_offset(Array[Double], Array[Double], tolerance_s? : Double, max_search_s? : Double) -> Alignment?
+
+pub fn shift(@wav.WavData, Double) -> @wav.WavData
+
 // Errors
 
 // Types and methods
+pub(all) struct Alignment {
+  offset_s : Double
+  matched : Int
+  tolerance_s : Double
+} derive(Eq, @debug.Debug)
+
 pub(all) struct Onset {
   time : Double
   strength : Double
