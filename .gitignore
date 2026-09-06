@@ -1,7 +1,23 @@
-.DS_Store
+# MoonBit 构建产物与依赖
 _build/
 target/
-target
 .mooncakes/
-.moonagent/
 .repos/
+
+# 本地工具 / agent 会话状态
+.moonagent/
+.zcode/
+
+# 编辑器与 IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 本地实验与日志
+*.log
+*.tmp
