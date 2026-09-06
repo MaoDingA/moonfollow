@@ -10,6 +10,8 @@ fn main raise {
     Some(("steps", m)) => run_steps(m)
     Some(("render", m)) => run_render(m)
     Some(("run", m)) => run_pipeline(m)
+    Some(("export", m)) => run_export(m)
+    Some(("mux", m)) => run_mux(m)
     _ => println(root.render_help())
   }
 }

@@ -23,8 +23,13 @@ ffmpeg -v error -f lavfi -i "anoisesrc=color=pink:amplitude=0.55:duration=0.06:s
 
 moon run cmd/moonfollow -- detect "$OUT/walker.mp4" -o "$OUT/foottrack.json"
 moon run cmd/moonfollow -- run "$OUT/foottrack.json" --sfx "$OUT/step.wav" -o "$OUT/footsteps.wav"
+moon run cmd/moonfollow -- steps "$OUT/foottrack.json" -o "$OUT/steps.json" > /dev/null
+moon run cmd/moonfollow -- export "$OUT/steps.json" -o "$OUT/steps.fcpxml"
+moon run cmd/moonfollow -- mux "$OUT/walker.mp4" "$OUT/footsteps.wav" -o "$OUT/walker-with-steps.mp4"
 
 echo "demo output in $OUT:"
-echo "  walker.mp4      source video"
-echo "  foottrack.json  per-frame foot positions"
-echo "  footsteps.wav   synced SFX track (import alongside walker.mp4)"
+echo "  walker.mp4            source video"
+echo "  foottrack.json        per-frame foot positions"
+echo "  footsteps.wav         synced SFX track (import alongside walker.mp4)"
+echo "  steps.fcpxml          markers for Resolve/FCP import"
+echo "  walker-with-steps.mp4 video with the SFX track muxed in"

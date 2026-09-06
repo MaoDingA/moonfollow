@@ -199,3 +199,66 @@ fn run_pipeline(m : @argparse.Matches) -> Unit raise {
     required_value(m, "rate"),
   )
 }
+
+///|
+fn run_export(m : @argparse.Matches) -> Unit raise {
+  let path = required_value(m, "steps")
+  let out = required_value(m, "output")
+  let format = match optional_value(m, "format") {
+    Some(f) => f
+    None => "fcpxml"
+  }
+  if format != "fcpxml" {
+    fail("unknown --format '\{format}' (only fcpxml)")
+  }
+  let doc : StepsDoc = @json.from_json(@json.parse(@fsio.read_string(path)))
+  let info = @vision.probe(doc.video)
+  let rate = @timecode.FrameRate::of_double(doc.fps)
+  let mut total = (doc.duration_s * doc.fps).round().to_int()
+  for e in doc.events {
+    if e.frame + 1 > total {
+      total = e.frame + 1
+    }
+  }
+  if total < 1 {
+    total = 1
+  }
+  let events : Array[@fcpxml.FootstepMarker] = []
+  for e in doc.events {
+    events.push({ frame: e.frame, foot: e.foot, strength: e.strength, })
+  }
+  let xml = @fcpxml.build(
+    video=doc.video,
+    width=info.width,
+    height=info.height,
+    rate~,
+    total_frames=total,
+    events~,
+  )
+  @fsio.write_string(out, xml)
+  println("wrote \{out}: \{events.length()} markers at \{rate} (\{doc.video})")
+}
+
+///|
+fn run_mux(m : @argparse.Matches) -> Unit raise {
+  let video = required_value(m, "video")
+  let wav = required_value(m, "wav")
+  let out = required_value(m, "output")
+  let proc = @fsio.spawn([
+    "ffmpeg", "-v", "error", "-y", "-i", video, "-i", wav, "-map", "0:v:0", "-map",
+    "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", out,
+  ]) catch {
+    _ => fail("ffmpeg not found on PATH (required for mux)")
+  }
+  // drain stdout so the pipe never blocks, then require a clean exit
+  while proc.read_chunk().length() > 0 {
+    ()
+  }
+  let status = proc.finish()
+  if status != 0 {
+    fail("ffmpeg exited with status \{status}")
+  }
+  println(
+    "wrote \{out}: \{video} + \{wav} (video stream copied, audio re-encoded AAC; any original audio is replaced)",
+  )
+}

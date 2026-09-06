@@ -33,6 +33,10 @@ moon run cmd/moonfollow -- run foottrack.json --sfx step.wav -o footsteps.wav
 # 或分步：先核对时码（可修剪 steps.json），再渲染
 moon run cmd/moonfollow -- steps foottrack.json -o steps.json
 moon run cmd/moonfollow -- render steps.json --sfx step.wav -o footsteps.wav
+
+# 3) 交给剪辑：时码标记导入 Resolve/FCP，或直接把音效轨合成进视频
+moon run cmd/moonfollow -- export steps.json -o steps.fcpxml
+moon run cmd/moonfollow -- mux clip.mp4 footsteps.wav -o clip-with-steps.mp4
 ```
 
 `run`/`steps` 打印每个落点的时码、左右脚、强度与帧号：
@@ -66,6 +70,10 @@ clip.mp4: 9 steps at 25 fps
   按标准规则在非整分跳过帧编号。
 - **placement/ + wav/**：纯 MoonBit 采样级混音；SFX 线性插值重采样、
   落地强度映射增益（下限 0.35）、峰值超过 0.9 时整体向下归一。
+- **fcpxml/**：FCPXML 1.8 导出——视频作为单条 asset-clip，每个落点一个
+  marker（有理数时间 `帧×den/num` 秒，29.97 丢帧率帧号精确），Resolve/FCP
+  导入后剪辑可在时间线上逐个微调；`mux` 走 ffmpeg `-c:v copy` 不重编码
+  视频，音效轨转 AAC（原视频音轨被替换）。
 
 ## 已知边界（v0.2）
 
@@ -78,21 +86,20 @@ clip.mp4: 9 steps at 25 fps
   列为后续项。
 - 开头约 0.3 s（背景暖机）内的落点不检测。
 - WAV 输入仅支持未压缩 PCM 16/24-bit。
-- 后续项：亚帧插值、侧面视角 x 接触点追踪、ffmpeg 直接合成视频、
-  Resolve XML 导出。
+- 后续项：侧面视角 x 接触点追踪（#5）、远距小目标追踪（#6）。
 
 ## 开发
 
 ```sh
 moon check            # 快速类型检查
-moon test             # 27 个黑盒快照测试
+moon test             # 31 个黑盒快照测试
 moon fmt && moon info # 提交前格式化并刷新 .mbti 接口
 ```
 
 包结构：`vision/`（解码 + 足部跟踪）、`timecode/`（SMPTE 数学）、`track/`
 （轨迹模型）、`steps/`（落点检测）、`wav/`（RIFF 编解码）、`placement/`
 （混音）、`internal/fsio/`（native FFI：文件 IO 与子进程管道）、
-`cmd/moonfollow/`（CLI）。
+`cmd/moonfollow/`（CLI）、`fcpxml/`（Resolve/FCP 标记导出）。
 
 **规则**：所有 MoonBit 实现代码必须遵循 `.agents/skills/` 下的官方
 MoonBit skills（见 [AGENTS.md](AGENTS.md)）。

@@ -122,11 +122,58 @@ fn build_command() -> @argparse.Command {
       ),
     ],
   )
+  let export_cmd = @argparse.Command::Command(
+    "export",
+    about="export the step list as FCPXML markers for Resolve/FCP import",
+    positionals=[
+      @argparse.PositionArg::PositionArg(
+        "steps",
+        about="steps JSON written by `moonfollow steps -o`",
+      ),
+    ],
+    options=[
+      @argparse.OptionArg::OptionArg(
+        "output",
+        short='o',
+        long="output",
+        about="output FCPXML path",
+        required=true,
+      ),
+      @argparse.OptionArg::OptionArg(
+        "format",
+        long="format",
+        about="export format (only fcpxml for now)",
+        default_values=["fcpxml"],
+      ),
+    ],
+  )
+  let mux_cmd = @argparse.Command::Command(
+    "mux",
+    about="mux a rendered SFX track into the video (ffmpeg, no video re-encode)",
+    positionals=[
+      @argparse.PositionArg::PositionArg("video", about="source video"),
+      @argparse.PositionArg::PositionArg(
+        "wav",
+        about="SFX track WAV written by render/run",
+      ),
+    ],
+    options=[
+      @argparse.OptionArg::OptionArg(
+        "output",
+        short='o',
+        long="output",
+        about="output video path",
+        required=true,
+      ),
+    ],
+  )
   @argparse.Command::Command(
     "moonfollow",
     about="footstep landings -> SMPTE timecodes -> synced SFX track",
     version="0.1.0",
-    subcommands=[detect_cmd, steps_cmd, render_cmd, run_cmd],
+    subcommands=[
+      detect_cmd, steps_cmd, render_cmd, run_cmd, export_cmd, mux_cmd,
+    ],
     arg_required_else_help=true,
     subcommand_required=true,
   )

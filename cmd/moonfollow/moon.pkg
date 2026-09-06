@@ -10,6 +10,7 @@ import {
   "MaoDingA/moonfollow/track",
   "MaoDingA/moonfollow/vision",
   "MaoDingA/moonfollow/wav",
+  "MaoDingA/moonfollow/fcpxml",
 }
 
 pkgtype(kind: "executable")

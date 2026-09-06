@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "MaoDingA/moonfollow/fcpxml"
+
+import {
+  "MaoDingA/moonfollow/timecode",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn build(video~ : String, width~ : Int, height~ : Int, rate~ : @timecode.FrameRate, total_frames~ : Int, events~ : Array[FootstepMarker]) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct FootstepMarker {
+  frame : Int
+  foot : String
+  strength : Double
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
