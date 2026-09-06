@@ -130,3 +130,38 @@ test "debounce collapses near-simultaneous events" {
   let split = detect(track, min_interval_s=0.05)
   debug_inspect(split.map(e => e.frame), content="[3, 6]")
 }
+
+///|
+test "sub-frame: parabolic vertex refines the landing time" {
+  // right foot samples an exact parabola with apex at frame 10.4; the
+  // strongest sample is frame 10, and the refined time should recover the
+  // apex to within rounding
+  let fps = 25.0
+  let frames : Array[@track.FrameRecord] = []
+  for i in 4..<=17 {
+    let t = i.to_double() / fps
+    let dx = i.to_double() - 10.4
+    let y = 0.5 - 0.01 * dx * dx
+    frames.push({
+      i,
+      t,
+      left: { x: 0.4, y: 0.8, v: 0.9, },
+      right: { x: 0.6, y, v: 0.9, },
+    })
+  }
+  let track : @track.FootTrack = {
+    video: "synthetic",
+    fps,
+    n_frames: frames.length(),
+    width: 1920,
+    height: 1080,
+    frames,
+  }
+  let events = detect(track)
+  inspect(events.length(), content="1")
+  inspect(events[0].frame, content="10")
+  let want = 10.4 / fps
+  if (events[0].time - want).abs() > 0.000000001 {
+    fail("refined time \{events[0].time}, want \{want}")
+  }
+}

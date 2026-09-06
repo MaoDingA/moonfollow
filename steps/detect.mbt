@@ -166,7 +166,22 @@ fn detect_side(
     let prominence = peak - neighborhood_min
     if prominence >= min_prominence {
       let strength = clamp01(prominence / full_stride)
-      candidates.push({ frame: frames[i].i, time: frames[i].t, foot, strength, })
+      // Sub-frame refinement: when the landing is a strict peak (both
+      // neighbours lower), the true apex falls between samples and the
+      // parabolic vertex through the three samples sharpens the time.
+      // A quantised plateau (equal or missing neighbours) keeps the integer
+      // frame time -- there is no curvature to extrapolate.
+      let mut time = frames[i].t
+      if ys[i + 1] is Some(after) && after < peak {
+        let denom = before - 2.0 * peak + after
+        if denom < -0.000000000001 {
+          let shift = 0.5 * (before - after) / denom
+          if shift > -1.0 && shift < 1.0 {
+            time = time + shift / track.fps
+          }
+        }
+      }
+      candidates.push({ frame: frames[i].i, time, foot, strength, })
     }
   }
   // debounce: candidates arrive in time order; events closer than
