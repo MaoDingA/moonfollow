@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "MaoDingA/moonfollow/audio"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn detect_onsets(Array[Double], Int, channels? : Int, frame_s? : Double, threshold_ratio? : Double, min_gap_s? : Double) -> Array[Onset]
+
+// Errors
+
+// Types and methods
+pub(all) struct Onset {
+  time : Double
+  strength : Double
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
