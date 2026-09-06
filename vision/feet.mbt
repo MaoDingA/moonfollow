@@ -7,33 +7,96 @@
 ///    ground at landing never pollutes the background model (the classic
 ///    failure of running-average backgrounds, which absorb whatever moves
 ///    slowly);
-/// 2. the foreground is "brighter than the background by `threshold`"
-///    (a bright subject on a darker scene);
+/// 2. the foreground is the subject differing from the background by more
+///    than `threshold` in one direction: brighter subjects use a temporal
+///    minimum background creeping upward, darker subjects a temporal
+///    maximum creeping downward (mirror images of each other);
 /// 3. the person is the bounding box of foreground row/column histograms;
-/// 4. the box is split at its horizontal midpoint, and each side's foot is
-///    its lowest foreground row (the lowest point of that foot in the
-///    picture);
-/// 5. visibility is the foreground support around the foot, so occluded or
+/// 4. the torso is the active column range in the upper half of the box,
+///    which stays stable while legs swing, cross, or hide each other;
+/// 5. in the lower 60% of the box, foreground columns are clustered into
+///    blobs; up to the two lowest blobs inside the torso range are the feet
+///    (a blob away from the torso is scenery, not a foot);
+/// 6. visibility is the foreground support around the foot, so occluded or
 ///    merged feet report low confidence and get gated downstream.
+///
+/// `person_height` exposes the last person box height so callers can pick a
+/// resolution where the person spans enough pixels for feet to swing visibly.
 
 ///|
 pub(all) struct FeetDetector {
   width : Int
   height : Int
+  dark : Bool // true: subject darker than background
   bg : FixedArray[Double]
   mut frames_seen : Int
-  mut mid_x : Int // smoothed person center column, -1 until first seen
+  mut last_person_height : Int
+  mut last_left_x : Double // last known foot positions, for identity
+  mut last_right_x : Double
 }
 
 ///|
-pub fn FeetDetector::new(width : Int, height : Int) -> FeetDetector {
+pub fn FeetDetector::new(
+  width : Int,
+  height : Int,
+  dark? : Bool = false,
+) -> FeetDetector {
   {
     width,
     height,
-    bg: FixedArray::make(width * height, 255.0),
+    dark,
+    bg: FixedArray::make(width * height, if dark { 0.0 } else { 255.0 }),
     frames_seen: 0,
-    mid_x: -1,
+    last_person_height: 0,
+    last_left_x: -1.0,
+    last_right_x: -1.0,
   }
+}
+
+///|
+/// Foreground difference in the active polarity.
+
+///|
+fn FeetDetector::fg_diff(
+  self : FeetDetector,
+  v : Double,
+  bg : Double,
+) -> Double {
+  if self.dark {
+    bg - v
+  } else {
+    v - bg
+  }
+}
+
+///|
+/// One step of the background model towards the current pixel.
+
+///|
+fn FeetDetector::bg_step(
+  self : FeetDetector,
+  v : Double,
+  bg : Double,
+) -> Double {
+  let lift = 0.15
+  if self.dark {
+    // temporal maximum creeping downward
+    if bg - lift > v {
+      bg - lift
+    } else {
+      v
+    }
+    // temporal minimum creeping upward
+  } else if bg + lift < v {
+    bg + lift
+  } else {
+    v
+  }
+}
+
+///|
+pub fn FeetDetector::person_height(self : FeetDetector) -> Int {
+  self.last_person_height
 }
 
 ///|
@@ -62,13 +125,13 @@ pub fn FeetDetector::process_frame(
 ) -> (@track.KeyPoint, @track.KeyPoint) {
   let w = self.width
   let h = self.height
-  let threshold = 25.0
-  let lift = 0.15 // per-frame upward creep of the background minimum
+  let threshold = 18.0
   let warmup = 8
   if self.frames_seen < warmup {
     for i in 0..<(w * h) {
       let v = frame[i].to_int().to_double()
-      if v < self.bg[i] {
+      let update = if self.dark { v > self.bg[i] } else { v < self.bg[i] }
+      if update {
         self.bg[i] = v
       }
     }
@@ -83,9 +146,9 @@ pub fn FeetDetector::process_frame(
     for x in 0..<w {
       let i = y * w + x
       let v = frame[i].to_int().to_double()
-      let bg = if self.bg[i] + lift < v { self.bg[i] + lift } else { v }
+      let bg = self.bg_step(v, self.bg[i])
       self.bg[i] = bg
-      if v - bg > threshold {
+      if self.fg_diff(v, bg) > threshold {
         row_counts[y] = row_counts[y] + 1
         col_counts[x] = col_counts[x] + 1
         total_fg = total_fg + 1
@@ -96,10 +159,6 @@ pub fn FeetDetector::process_frame(
   if total_fg < min_person_pixels {
     return (invisible, invisible)
   }
-  // person center from the torso (upper half of the box): legs swinging or
-  // hidden must not pull the split point toward one side
-  let _ = total_fg
-
   // person bounding box from histogram thresholds
   let min_row_pixels = if w / 25 > 2 { w / 25 } else { 2 }
   let min_col_pixels = if h / 25 > 2 { h / 25 } else { 2 }
@@ -129,104 +188,156 @@ pub fn FeetDetector::process_frame(
   if xmin < 0 {
     return (invisible, invisible)
   }
-  // Split the feet by the widest horizontal gap between foreground columns
-  // in the bottom third of the person box. A fixed midpoint split cannot
-  // survive legs crossing or one leg fully hidden mid-swing.
   let person_h = ymax - ymin + 1
-  let region_top = if ymax - person_h / 3 > ymin {
-    ymax - person_h / 3
-  } else {
-    ymin
+  self.last_person_height = person_h
+  // torso column range: active columns in the upper half of the box
+  let torso_bottom = ymin + person_h / 2
+  let mut torso_xmin = -1
+  let mut torso_xmax = -1
+  for x in xmin..<=xmax {
+    let mut count = 0
+    for y in ymin..<=torso_bottom {
+      let v = frame[y * w + x].to_int().to_double()
+      if self.fg_diff(v, self.bg[y * w + x]) > threshold {
+        count = count + 1
+      }
+    }
+    if count >= 2 {
+      if torso_xmin < 0 {
+        torso_xmin = x
+      }
+      torso_xmax = x
+    }
   }
+  if torso_xmin < 0 {
+    return (invisible, invisible)
+  }
+  // dark subjects drag their cast shadow into the foreground; the shadow is
+  // considerably fainter than the subject itself, so feet blobs use a much
+  // stricter threshold to stay on the body
+  let foot_threshold = if self.dark { threshold * 2.2 } else { threshold }
+  // foot blob search region: everything below one box height above ymin. The
+  // swing foot rises to mid-box, and when a static body is absorbed into the
+  // background the box shrinks to the legs, so the search must extend a full
+  // box height above ymin or the top of the swing turns invisible; the rows
+  // up there are foreground-limited anyway (absorbed body = no fg)
+  let region_top = if ymin - person_h > 0 { ymin - person_h } else { 0 }
   let cols = FixedArray::make(w, 0)
   for y in region_top..<=ymax {
-    for x in xmin..<=xmax {
+    for x in torso_xmin..<=torso_xmax {
       let i = y * w + x
       let v = frame[i].to_int().to_double()
-      if v - self.bg[i] > threshold {
+      if self.fg_diff(v, self.bg[i]) > foot_threshold {
         cols[x] = cols[x] + 1
       }
     }
   }
-  let mut first_active = -1
-  let mut last_active = -1
-  for x in xmin..<=xmax {
-    if cols[x] >= 2 {
-      if first_active < 0 {
-        first_active = x
-      }
-      last_active = x
-    }
-  }
-  if first_active < 0 {
-    return (invisible, invisible)
-  }
-  // widest run of inactive columns strictly between the outer active columns
-  let mut gap_start = -1
-  let mut gap_width = 0
+  let x_lo = if torso_xmin - 2 > 0 { torso_xmin - 2 } else { 0 }
+  let x_hi = if torso_xmax + 2 < w - 1 { torso_xmax + 2 } else { w - 1 }
+  // blobs = runs of active columns separated by gaps >= 3
+  let blobs : Array[(Int, Int)] = [] // (x_from, x_to)
   let mut run_start = -1
-  for x in (first_active + 1)..<last_active {
-    if cols[x] < 2 {
+  let mut last_active = -1
+  let mut gap = 99
+  for x in x_lo..<=x_hi {
+    if cols[x] >= 2 {
       if run_start < 0 {
         run_start = x
+        gap = 0
+      } else if gap > 0 {
+        if gap >= 3 {
+          blobs.push((run_start, last_active))
+          run_start = x
+        }
+        gap = 0
       }
+      last_active = x
     } else if run_start >= 0 {
-      let width = x - run_start
-      if width > gap_width {
-        gap_width = width
-        gap_start = run_start
-      }
-      run_start = -1
+      gap = gap + 1
     }
   }
   if run_start >= 0 {
-    let width = last_active - run_start
-    if width > gap_width {
-      gap_width = width
-      gap_start = run_start
-    }
+    blobs.push((run_start, last_active))
   }
-  if gap_width >= 2 {
-    // two blobs: smaller x is the left foot
-    let split = gap_start + gap_width / 2
-    let lower = foot_in_side(
-      self, frame, ymin, ymax, first_active, split, threshold,
+  if blobs.length() == 0 {
+    return (invisible, invisible)
+  }
+  // rank blobs by their foot height (lower = more foot-like); keep two
+  let feet : Array[@track.KeyPoint] = []
+  for blob in blobs {
+    let (x_from, x_to) = blob
+    feet.push(
+      foot_in_blob(
+        self,
+        frame,
+        region_top,
+        ymax,
+        x_from,
+        x_to + 1,
+        foot_threshold,
+      ),
     )
-    let upper = foot_in_side(
-      self,
-      frame,
-      ymin,
-      ymax,
-      split,
-      last_active + 1,
-      threshold,
-    )
-    (lower, upper)
+  }
+  feet.sort_by((a, b) => b.y.compare(a.y)) // lowest first
+  if feet[0].v == 0.0 {
+    return (invisible, invisible)
+  }
+  let first = feet[0]
+  let second = if feet.length() > 1 && feet[1].v > 0.0 {
+    feet[1]
   } else {
-    // one blob: a single visible foot; name it by the last known center
-    let foot = foot_in_side(
-      self,
-      frame,
-      ymin,
-      ymax,
-      first_active,
-      last_active + 1,
-      threshold,
-    )
-    let right_side = foot.x > 0.5
-    if right_side {
-      (invisible, foot)
-    } else {
-      (foot, invisible)
-    }
+    invisible
   }
+  // identity: name the two feet by continuity with the last known positions
+  name_feet(self, first, second)
 }
 
 ///|
-/// Lowest foreground position inside one horizontal half of the person box.
+/// Assign left/right by continuity with the previous frame's feet so a
+/// single visible blob keeps its identity while it walks across.
 
 ///|
-fn foot_in_side(
+fn name_feet(
+  det : FeetDetector,
+  a : @track.KeyPoint,
+  b : @track.KeyPoint,
+) -> (@track.KeyPoint, @track.KeyPoint) {
+  if b.v == 0.0 {
+    // one foot: closer to last left or last right keeps its name. Without
+    // anchors nothing anchors identity yet: emit the foot in the left slot
+    // without recording an anchor, so a guessed name can never flip against
+    // the first real two-foot frame (left = smaller x there)
+    if det.last_left_x < 0.0 && det.last_right_x < 0.0 {
+      return (a, invisible)
+    }
+    let d_left = if det.last_left_x >= 0.0 {
+      (a.x - det.last_left_x).abs()
+    } else {
+      2.0
+    }
+    let d_right = if det.last_right_x >= 0.0 {
+      (a.x - det.last_right_x).abs()
+    } else {
+      2.0
+    }
+    if d_left <= d_right {
+      det.last_left_x = a.x
+      return (a, invisible)
+    }
+    det.last_right_x = a.x
+    return (invisible, a)
+  }
+  let (lo, hi) = if a.x <= b.x { (a, b) } else { (b, a) }
+  det.last_left_x = lo.x
+  det.last_right_x = hi.x
+  (lo, hi)
+}
+
+///|
+/// Lowest foreground position inside one blob's column range.
+
+///|
+fn foot_in_blob(
   det : FeetDetector,
   frame : Bytes,
   box_top : Int,
@@ -248,7 +359,7 @@ fn foot_in_side(
     for x in x_from..<x_to {
       let i = y * w + x
       let v = frame[i].to_int().to_double()
-      if (v - det.bg[i]).abs() > threshold {
+      if det.fg_diff(v, det.bg[i]) > threshold {
         count = count + 1
         x_sum = x_sum + x.to_double()
       }
@@ -265,7 +376,7 @@ fn foot_in_side(
     return invisible
   }
   let x = foot_x_sum / foot_x_count.to_double()
-  let side_width = x_to - x_from
+  let blob_width = x_to - x_from
   // visibility: foreground support in the rows right above the foot
   let window_top = if foot_y - 5 > box_top { foot_y - 5 } else { box_top }
   let mut support = 0
@@ -274,7 +385,7 @@ fn foot_in_side(
     support = support + row_counts[row]
     row = row - 1
   }
-  let density = support.to_double() / (side_width * 6).to_double()
+  let density = support.to_double() / (blob_width * 6).to_double()
   {
     x: x / w.to_double(),
     y: foot_y.to_double() / det.height.to_double(),

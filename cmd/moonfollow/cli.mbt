@@ -9,6 +9,18 @@ fn build_command() -> @argparse.Command {
         about="input video, constant frame rate",
       ),
     ],
+    flags=[
+      @argparse.FlagArg::FlagArg(
+        "dark",
+        long="dark",
+        about="force dark-subject polarity instead of auto",
+      ),
+      @argparse.FlagArg::FlagArg(
+        "bright",
+        long="bright",
+        about="force bright-subject polarity instead of auto",
+      ),
+    ],
     options=[
       @argparse.OptionArg::OptionArg(
         "output",

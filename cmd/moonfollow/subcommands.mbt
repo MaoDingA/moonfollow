@@ -125,7 +125,14 @@ fn run_detect(m : @argparse.Matches) -> Unit raise {
   let width : Int = @strconv.from_str(required_value(m, "width")) catch {
     _ => fail("invalid --width")
   }
-  let track = @vision.detect_track(path, width~)
+  let polarity : @vision.Polarity = if m.flags.get("dark") == Some(true) {
+    @vision.Dark
+  } else if m.flags.get("bright") == Some(true) {
+    @vision.Bright
+  } else {
+    @vision.Auto
+  }
+  let track = @vision.detect_track(path, width~, polarity~)
   @fsio.write_string(out, @json.to_json(track).stringify())
   println(
     "wrote \{out}: \{track.n_frames} frames @ \{track.fps} fps, \{track.width}x\{track.height}",

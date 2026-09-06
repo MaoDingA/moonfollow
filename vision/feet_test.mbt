@@ -52,9 +52,11 @@ test "feet: swing lifts the foot, stance keeps it down" {
   // planted foot is unchanged, swung foot is higher
   inspect(left2.y > left1.y - 0.001, content="true")
   inspect(right2.y < left1.y, content="true")
-  // a foot lifted out of the bottom region entirely is simply not reported
-  let (_, gone) = det.process_frame(walker_frame(88, 64))
-  inspect(gone.v == 0.0, content="true")
+  // a foot lifted out of the bottom region is still tracked mid-swing (the
+  // landing oscillation needs the swing to stay visible), just higher up
+  let (left3, gone) = det.process_frame(walker_frame(88, 64))
+  inspect(gone.v > 0.5, content="true")
+  inspect(gone.y < left3.y, content="true")
 }
 
 ///|
@@ -68,4 +70,29 @@ test "feet: empty scene reports invisible feet" {
   let (left, right) = det.process_frame(empty)
   inspect(left.v == 0.0, content="true")
   inspect(right.v == 0.0, content="true")
+}
+
+///|
+/// Photometric inverse of `walker_frame`: bright background, dark person.
+
+///|
+fn inverted(bytes : Bytes) -> Bytes {
+  let buf = Buffer::Buffer()
+  for i in 0..<bytes.length() {
+    buf.write_byte((255 - bytes[i].to_int()).to_byte())
+  }
+  buf.to_bytes()
+}
+
+///|
+test "feet: dark subject against bright background tracks the same feet" {
+  let det = FeetDetector::new(160, 90, dark=true)
+  for _ in 0..<13 {
+    ignore(det.process_frame(inverted(walker_frame(60, 60))))
+  }
+  let (left, right) = det.process_frame(inverted(walker_frame(88, 80)))
+  inspect((left.y - 87.0 / 90.0).abs() < 0.011, content="true")
+  inspect((right.y - 79.0 / 90.0).abs() < 0.011, content="true")
+  inspect(left.v > 0.5, content="true")
+  inspect(left.x < right.x, content="true")
 }

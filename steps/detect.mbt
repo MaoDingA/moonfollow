@@ -108,6 +108,37 @@ fn detect_side(
     }
   }
   let n = ys.length()
+  // Bridge short visibility dropouts (detector flicker on small or distant
+  // feet): a run of invisible frames whose visible endpoints are at most
+  // ~0.1 s apart is filled by linear interpolation, so a landing plateau is
+  // not split in half by a single dropped frame.
+  let max_gap = (track.fps * 0.1).round().to_int()
+  let max_gap = if max_gap < 1 { 1 } else if max_gap > 4 { 4 } else { max_gap }
+  let mut i = 0
+  while i < n {
+    guard ys[i] is Some(_) else {
+      i = i + 1
+      continue
+    }
+    let mut j = i + 1
+    let mut gap = 0
+    while j < n {
+      guard ys[j] is None else { break }
+      gap = gap + 1
+      j = j + 1
+    }
+    if j < n && gap > 0 && gap <= max_gap {
+      guard ys[i] is Some(a) && ys[j] is Some(b) else {
+        i = j
+        continue
+      }
+      for k in (i + 1)..<j {
+        let t = (k - i).to_double() / (j - i).to_double()
+        ys[k] = Some(a + (b - a) * t)
+      }
+    }
+    i = if j > i { j } else { i + 1 }
+  }
   // candidates: strict local maxima confirmed by both adjacent visible frames
   let candidates : Array[StepEvent] = []
   for i in 1..<(n - 1) {

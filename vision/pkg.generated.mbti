@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn detect_track(String, width? : Int) -> @track.FootTrack raise VisionError
+pub fn detect_track(String, width? : Int, polarity? : Polarity) -> @track.FootTrack raise VisionError
 
 pub fn probe(String) -> VideoInfo raise VisionError
 
@@ -27,11 +27,15 @@ pub impl Show for VisionError
 pub(all) struct FeetDetector {
   width : Int
   height : Int
+  dark : Bool
   bg : FixedArray[Double]
   mut frames_seen : Int
-  mut mid_x : Int
+  mut last_person_height : Int
+  mut last_left_x : Double
+  mut last_right_x : Double
 }
-pub fn FeetDetector::new(Int, Int) -> Self
+pub fn FeetDetector::new(Int, Int, dark? : Bool) -> Self
+pub fn FeetDetector::person_height(Self) -> Int
 pub fn FeetDetector::process_frame(Self, Bytes) -> (@track.KeyPoint, @track.KeyPoint)
 
 pub(all) struct FrameReader {
@@ -44,6 +48,12 @@ pub(all) struct FrameReader {
 pub fn FrameReader::finish(Self) -> Unit raise VisionError
 pub fn FrameReader::next_frame(Self) -> Bytes?
 pub fn FrameReader::open(String, src_width~ : Int, src_height~ : Int, width? : Int) -> Self raise VisionError
+
+pub(all) enum Polarity {
+  Auto
+  Bright
+  Dark
+} derive(@debug.Debug)
 
 type ProbeJson derive(@json.FromJson)
 
