@@ -1,4 +1,4 @@
-name = "phenom8010/moonfollow"
+name = "MaoDingA/moonfollow"
 
 version = "0.1.0"
 

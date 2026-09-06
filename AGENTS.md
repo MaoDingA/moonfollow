@@ -35,7 +35,7 @@
 - **项目代码必须 100% MoonBit**：所有功能实现（视频解码调度、视觉检测、
   时码、音频）都在 MoonBit 包里；非 MoonBit 内容仅限官方 FFI 所需的
   C 胶水（`internal/fsio/stub.c`）与对外部工具二进制（ffmpeg/ffprobe）的调用。
-- 模块 `phenom8010/moonfollow`，`moon.mod` 使用新格式，`preferred_target = "native"`。
+- 模块 `MaoDingA/moonfollow`，`moon.mod` 使用新格式，`preferred_target = "native"`。
 - 每个包目录一个 `moon.pkg`；测试用黑盒 `*_test.mbt` + `inspect`/`debug_inspect` 快照。
 - 代码块以 `///|` 分隔；接口文件 `pkg.generated.mbti` 由 `moon info` 生成，勿手改。
 - 提交前跑 `moon check`、`moon test`、`moon fmt`、`moon info`。

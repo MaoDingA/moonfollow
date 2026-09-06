@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "phenom8010/moonfollow/internal/fsio"
+package "MaoDingA/moonfollow/internal/fsio"
 
 import {
   "moonbitlang/core/debug",

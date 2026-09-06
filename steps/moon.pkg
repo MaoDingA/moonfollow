@@ -1,8 +1,8 @@
 import {
-  "phenom8010/moonfollow/track",
+  "MaoDingA/moonfollow/track",
 }
 
 import {
-  "phenom8010/moonfollow/track",
+  "MaoDingA/moonfollow/track",
   "moonbitlang/core/math",
 } for "test"

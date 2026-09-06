@@ -3,6 +3,6 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/strconv",
-  "phenom8010/moonfollow/internal/fsio",
-  "phenom8010/moonfollow/track",
+  "MaoDingA/moonfollow/internal/fsio",
+  "MaoDingA/moonfollow/track",
 }

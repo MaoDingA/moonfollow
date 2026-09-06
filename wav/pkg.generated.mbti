@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "phenom8010/moonfollow/wav"
+package "MaoDingA/moonfollow/wav"
 
 import {
   "moonbitlang/core/debug",

@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "phenom8010/moonfollow/placement"
+package "MaoDingA/moonfollow/placement"
 
 import {
-  "phenom8010/moonfollow/steps",
-  "phenom8010/moonfollow/wav",
+  "MaoDingA/moonfollow/steps",
+  "MaoDingA/moonfollow/wav",
 }
 
 // Values

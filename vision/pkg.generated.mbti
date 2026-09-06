@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "phenom8010/moonfollow/vision"
+package "MaoDingA/moonfollow/vision"
 
 import {
+  "MaoDingA/moonfollow/internal/fsio",
+  "MaoDingA/moonfollow/track",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
-  "phenom8010/moonfollow/internal/fsio",
-  "phenom8010/moonfollow/track",
 }
 
 // Values

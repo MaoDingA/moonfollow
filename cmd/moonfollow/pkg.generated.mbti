@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "phenom8010/moonfollow/cmd/moonfollow"
+package "MaoDingA/moonfollow/cmd/moonfollow"
 
 import {
   "moonbitlang/core/debug",

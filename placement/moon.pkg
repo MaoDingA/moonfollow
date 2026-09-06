@@ -1,4 +1,4 @@
 import {
-  "phenom8010/moonfollow/steps",
-  "phenom8010/moonfollow/wav",
+  "MaoDingA/moonfollow/steps",
+  "MaoDingA/moonfollow/wav",
 }

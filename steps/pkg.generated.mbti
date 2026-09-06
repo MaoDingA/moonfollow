@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "phenom8010/moonfollow/steps"
+package "MaoDingA/moonfollow/steps"
 
 import {
+  "MaoDingA/moonfollow/track",
   "moonbitlang/core/debug",
-  "phenom8010/moonfollow/track",
 }
 
 // Values

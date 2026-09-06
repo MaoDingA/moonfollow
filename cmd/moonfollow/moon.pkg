@@ -3,13 +3,13 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/core/strconv",
-  "phenom8010/moonfollow/internal/fsio",
-  "phenom8010/moonfollow/placement",
-  "phenom8010/moonfollow/steps",
-  "phenom8010/moonfollow/timecode",
-  "phenom8010/moonfollow/track",
-  "phenom8010/moonfollow/vision",
-  "phenom8010/moonfollow/wav",
+  "MaoDingA/moonfollow/internal/fsio",
+  "MaoDingA/moonfollow/placement",
+  "MaoDingA/moonfollow/steps",
+  "MaoDingA/moonfollow/timecode",
+  "MaoDingA/moonfollow/track",
+  "MaoDingA/moonfollow/vision",
+  "MaoDingA/moonfollow/wav",
 }
 
 pkgtype(kind: "executable")

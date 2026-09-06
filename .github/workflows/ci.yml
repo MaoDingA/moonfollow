@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit toolchain
+        run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Type check
+        run: ~/.moon/bin/moon check
+      - name: Unit tests
+        run: ~/.moon/bin/moon test
+      - name: End-to-end demo (detect -> steps -> render)
+        run: |
+          export PATH="$HOME/.moon/bin:$PATH"
+          sh examples/demo.sh
