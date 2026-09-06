@@ -12,6 +12,7 @@ fn main raise {
     Some(("run", m)) => run_pipeline(m)
     Some(("export", m)) => run_export(m)
     Some(("mux", m)) => run_mux(m)
+    Some(("align", m)) => run_align(m)
     _ => println(root.render_help())
   }
 }

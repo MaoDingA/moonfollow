@@ -44,7 +44,6 @@ pub fn estimate_offset(
   }
   let mut best_d = 0.0
   let mut best_score = 0
-  let mut best_pairs : Array[Double] = []
   for d in candidates {
     let mut score = 0
     for a in audio_events {

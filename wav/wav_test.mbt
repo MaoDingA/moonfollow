@@ -117,3 +117,44 @@ test "rejects garbage and unsupported formats" {
     _ => fail("expected to fail")
   }
 }
+
+///|
+fn put_u16(b : Buffer, v : Int) -> Unit {
+  b.write_byte((v & 0xff).to_byte())
+  b.write_byte(((v >> 8) & 0xff).to_byte())
+}
+
+///|
+fn put_u32(b : Buffer, v : Int) -> Unit {
+  b.write_byte((v & 0xff).to_byte())
+  b.write_byte(((v >> 8) & 0xff).to_byte())
+  b.write_byte(((v >> 16) & 0xff).to_byte())
+  b.write_byte(((v >> 24) & 0xff).to_byte())
+}
+
+///|
+test "wav: streaming data-chunk size placeholder is clamped to the file" {
+  // ffmpeg writing to a pipe sets RIFF/data sizes to 0xFFFFFFFF
+  let b = Buffer::Buffer()
+  b.write_bytes(b"RIFF")
+  put_u32(b, -1) // RIFF size placeholder
+  b.write_bytes(b"WAVE")
+  b.write_bytes(b"fmt ")
+  put_u32(b, 16)
+  put_u16(b, 1) // PCM
+  put_u16(b, 1) // mono
+  put_u32(b, 16000) // sample rate
+  put_u32(b, 32000) // byte rate
+  put_u16(b, 2) // block align
+  put_u16(b, 16) // bits
+  b.write_bytes(b"data")
+  put_u32(b, -1) // data size placeholder
+  put_u16(b, 0x4000) // 0.5
+  put_u16(b, 0xc000) // -0.5 (as unsigned 0xc000)
+  let wav = @wav.WavData::parse(b.to_bytes())
+  inspect(wav.sample_rate, content="16000")
+  inspect(wav.channels, content="1")
+  inspect(wav.samples.length(), content="2")
+  inspect((wav.samples[0] - 0.5).abs() < 0.001, content="true")
+  inspect((wav.samples[1] + 0.5).abs() < 0.001, content="true")
+}

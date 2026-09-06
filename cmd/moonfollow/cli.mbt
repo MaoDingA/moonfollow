@@ -147,6 +147,25 @@ fn build_command() -> @argparse.Command {
       ),
     ],
   )
+  let align_cmd = @argparse.Command::Command(
+    "align",
+    about="re-align an offset footstep audio track onto the visual landings",
+    positionals=[
+      @argparse.PositionArg::PositionArg(
+        "video",
+        about="video whose footstep audio is out of sync",
+      ),
+    ],
+    options=[
+      @argparse.OptionArg::OptionArg(
+        "output",
+        short='o',
+        long="output",
+        about="output video path (aligned audio muxed in)",
+        required=true,
+      ),
+    ],
+  )
   let mux_cmd = @argparse.Command::Command(
     "mux",
     about="mux a rendered SFX track into the video (ffmpeg, no video re-encode)",
@@ -172,7 +191,7 @@ fn build_command() -> @argparse.Command {
     about="footstep landings -> SMPTE timecodes -> synced SFX track",
     version="0.1.0",
     subcommands=[
-      detect_cmd, steps_cmd, render_cmd, run_cmd, export_cmd, mux_cmd,
+      detect_cmd, steps_cmd, render_cmd, run_cmd, export_cmd, mux_cmd, align_cmd,
     ],
     arg_required_else_help=true,
     subcommand_required=true,

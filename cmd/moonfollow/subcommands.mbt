@@ -244,6 +244,17 @@ fn run_mux(m : @argparse.Matches) -> Unit raise {
   let video = required_value(m, "video")
   let wav = required_value(m, "wav")
   let out = required_value(m, "output")
+  ffmpeg_mux(video, wav, out)
+  println(
+    "wrote \{out}: \{video} + \{wav} (video stream copied, audio re-encoded AAC; any original audio is replaced)",
+  )
+}
+
+///|
+/// Mux an audio track into a video with the video stream copied.
+
+///|
+fn ffmpeg_mux(video : String, wav : String, out : String) -> Unit raise {
   let proc = @fsio.spawn([
     "ffmpeg", "-v", "error", "-y", "-i", video, "-i", wav, "-map", "0:v:0", "-map",
     "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", out,
@@ -258,7 +269,75 @@ fn run_mux(m : @argparse.Matches) -> Unit raise {
   if status != 0 {
     fail("ffmpeg exited with status \{status}")
   }
-  println(
-    "wrote \{out}: \{video} + \{wav} (video stream copied, audio re-encoded AAC; any original audio is replaced)",
+}
+
+///|
+/// Extract the video's first audio track as 48 kHz PCM WAV bytes.
+
+///|
+fn extract_audio_wav(video : String) -> Bytes raise {
+  let proc = @fsio.spawn([
+    "ffmpeg", "-v", "error", "-i", video, "-map", "0:a:0", "-vn", "-ar", "48000",
+    "-f", "wav", "-",
+  ]) catch {
+    _ => fail("ffmpeg not found on PATH (required for align)")
+  }
+  let buf = Buffer::Buffer()
+  while true {
+    let chunk = proc.read_chunk()
+    if chunk.length() == 0 {
+      break
+    }
+    buf.write_bytes(chunk)
+  }
+  let status = proc.finish()
+  if status != 0 || buf.length() == 0 {
+    fail("no decodable audio track in \{video}")
+  }
+  buf.to_bytes()
+}
+
+///|
+fn run_align(m : @argparse.Matches) -> Unit raise {
+  let video = required_value(m, "video")
+  let out = required_value(m, "output")
+  // visual landings, sub-frame times
+  let track = @vision.detect_track(video)
+  let steps = @steps.detect(track)
+  if steps.length() == 0 {
+    fail("no footstep landings detected in the video; nothing to align to")
+  }
+  let video_times : Array[Double] = steps.map(e => e.time)
+  // original audio: onsets and shift target
+  let wav = @wav.WavData::parse(extract_audio_wav(video)) catch {
+    _ => fail("audio track is not uncompressed PCM WAV after decode")
+  }
+  let onsets = @audio.detect_onsets(
+    wav.samples,
+    wav.sample_rate,
+    channels=wav.channels,
   )
+  if onsets.length() == 0 {
+    fail("no footstep onsets found in the audio track")
+  }
+  let audio_times : Array[Double] = onsets.map(o => o.time)
+  match @audio.estimate_offset(audio_times, video_times) {
+    None =>
+      fail(
+        "could not align: \{audio_times.length()} onsets vs \{video_times.length()} landings, no consistent offset",
+      )
+    Some(a) => {
+      let corrected = @audio.shift(wav, -a.offset_s)
+      let wav_out = "\{out}.aligned.wav"
+      @fsio.write_bytes(wav_out, corrected.encode_pcm16())
+      ffmpeg_mux(video, wav_out, out)
+      let sign = if a.offset_s >= 0.0 { "late" } else { "early" }
+      println(
+        "\{video}: footstep audio was \{sign} by \{a.offset_s.abs() * 1000.0} ms",
+      )
+      println(
+        "matched \{a.matched}/\{audio_times.length()} onsets to \{video_times.length()} landings; corrected track \{wav_out}; video \{out}",
+      )
+    }
+  }
 }

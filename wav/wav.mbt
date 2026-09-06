@@ -70,8 +70,16 @@ pub fn WavData::parse(bytes : Bytes) -> WavData raise WavError {
   let mut data_start = -1
   let mut data_size = 0
   while pos + 8 <= view.length() {
-    let size = read_u32(view, pos + 4)
-    if size < 0 || pos + 8 + size > view.length() {
+    let mut size = read_u32(view, pos + 4)
+    if size < 0 {
+      // streaming encoders (ffmpeg writing to a pipe) leave the data chunk
+      // size as the 0xFFFFFFFF sentinel; the samples then run to end of file
+      if tag_is(view, pos, b"data") {
+        size = view.length() - pos - 8
+      } else {
+        not_wav("truncated chunk at byte \{pos}")
+      }
+    } else if pos + 8 + size > view.length() {
       not_wav("truncated chunk at byte \{pos}")
     }
     if tag_is(view, pos, b"fmt ") {
