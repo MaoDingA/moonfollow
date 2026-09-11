@@ -11,9 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install MoonBit toolchain
-        # pinned: newer cores changed @strconv.from_str to non-raising,
-        # which breaks the checked-error handling here at type check
-        run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s '0.1.20260827'
+        run: curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Type check
