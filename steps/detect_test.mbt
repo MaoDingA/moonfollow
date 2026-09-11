@@ -165,3 +165,64 @@ test "sub-frame: parabolic vertex refines the landing time" {
     fail("refined time \{events[0].time}, want \{want}")
   }
 }
+
+///|
+/// Irregular gait: uneven step gaps, a long standing pause, resumption.
+/// Detection is period-free (a landing is the plateau start of each foot's
+/// own y series), so the exact landing frames must come back regardless of
+/// rhythm -- and the pause must produce nothing.
+
+///|
+fn irregular_walk() -> @track.FootTrack {
+  let fps = 25.0
+  let landings = [
+    ('L', 10),
+    ('R', 25),
+    ('L', 40),
+    ('R', 83),
+    ('L', 100),
+    ('R', 114),
+  ] // gaps: 0.6, 0.6, pause, 0.68, 0.56 s -- deliberately uneven
+  let swing = 8 // frames from lift to plant
+  let frames : Array[@track.FrameRecord] = []
+  for i in 0..<125 {
+    let t = i.to_double() / fps
+    fn y_for(foot : Char) -> Double {
+      let planted = 0.95
+      let lifted = 0.62
+      let mut y = planted
+      for pair in landings {
+        let (f, land) = pair
+        if f != foot {
+          continue
+        }
+        let d = land - i
+        if d > 0 && d <= swing {
+          // triangular swing: up for the first half, down for the second
+          let u = 1.0 - d.to_double() / swing.to_double()
+          y = if u < 0.5 {
+            planted - (planted - lifted) * (u * 2.0)
+          } else {
+            lifted + (planted - lifted) * ((u - 0.5) * 2.0)
+          }
+        }
+      }
+      y
+    }
+    frames.push({
+      i,
+      t,
+      left: { x: 0.4, y: y_for('L'), v: 0.9, },
+      right: { x: 0.6, y: y_for('R'), v: 0.9, },
+    })
+  }
+  { video: "irregular", fps, n_frames: 125, width: 1920, height: 1080, frames, }
+}
+
+///|
+test "irregular gait: exact landings, pause yields nothing" {
+  let events = detect(irregular_walk())
+  debug_inspect(events.map(e => e.frame), content="[10, 25, 40, 83, 100, 114]")
+  let feet = events.map(e => if e.foot is Left { "L" } else { "R" })
+  debug_inspect(feet, content="[\"L\", \"R\", \"L\", \"R\", \"L\", \"R\"]")
+}
