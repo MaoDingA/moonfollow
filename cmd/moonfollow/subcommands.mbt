@@ -327,7 +327,14 @@ fn run_align(m : @argparse.Matches) -> Unit raise {
         "could not align: \{audio_times.length()} onsets vs \{video_times.length()} landings, no consistent offset",
       )
     Some(a) => {
-      let corrected = @audio.shift(wav, -a.offset_s)
+      // meaningful drift (>= one tolerance accumulated) needs a speed
+      // correction through interpolation; otherwise the sample-exact shift
+      // is strictly better
+      let corrected = if a.drift == 0.0 {
+        @audio.shift(wav, -a.offset_s)
+      } else {
+        @audio.retime(wav, offset_s=a.offset_s, drift=a.drift)
+      }
       let wav_out = "\{out}.aligned.wav"
       @fsio.write_bytes(wav_out, corrected.encode_pcm16())
       ffmpeg_mux(video, wav_out, out)
@@ -335,6 +342,14 @@ fn run_align(m : @argparse.Matches) -> Unit raise {
       println(
         "\{video}: footstep audio was \{sign} by \{a.offset_s.abs() * 1000.0} ms",
       )
+      if a.drift != 0.0 {
+        // ms of extra lag per minute of footage, and the recorder speed
+        // error it implies
+        let ms_per_min = a.drift * 60000.0
+        println(
+          "clock drift \{ms_per_min} ms/min (recorder ran \{if a.drift > 0.0 { "slow" } else { "fast" }} by \{a.drift.abs() * 100.0}%) -- speed corrected",
+        )
+      }
       println(
         "matched \{a.matched}/\{audio_times.length()} onsets to \{video_times.length()} landings; corrected track \{wav_out}; video \{out}",
       )

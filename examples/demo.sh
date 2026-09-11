@@ -27,12 +27,20 @@ moon run cmd/moonfollow -- steps "$OUT/foottrack.json" -o "$OUT/steps.json" > /d
 moon run cmd/moonfollow -- export "$OUT/steps.json" -o "$OUT/steps.fcpxml"
 moon run cmd/moonfollow -- mux "$OUT/walker.mp4" "$OUT/footsteps.wav" -o "$OUT/walker-with-steps.mp4"
 
-# alignment demo: deliberately delay the SFX track 0.4 s, then realign it
+# alignment demo 1: deliberately delay the SFX track 0.4 s, then realign it
 # from the video alone (all 9 onsets must pair with the 9 landings)
 ffmpeg -v error -y -i "$OUT/footsteps.wav" -af "adelay=400" -acodec pcm_s16le "$OUT/delayed.wav"
 moon run cmd/moonfollow -- mux "$OUT/walker.mp4" "$OUT/delayed.wav" -o "$OUT/misaligned.mp4" > /dev/null
 moon run cmd/moonfollow -- align "$OUT/misaligned.mp4" -o "$OUT/realigned.mp4" | grep -q "matched 9/9" \
   || { echo "align: expected 9/9 matched onsets"; exit 1; }
+
+# alignment demo 2: clock drift -- audio sped up 4% as if from a recorder
+# running fast; a constant shift cannot fix growing error, align must
+# detect the drift and speed-correct
+ffmpeg -v error -y -i "$OUT/footsteps.wav" -af "atempo=1.04" -acodec pcm_s16le "$OUT/drifted.wav"
+moon run cmd/moonfollow -- mux "$OUT/walker.mp4" "$OUT/drifted.wav" -o "$OUT/misaligned-drift.mp4" > /dev/null
+moon run cmd/moonfollow -- align "$OUT/misaligned-drift.mp4" -o "$OUT/realigned-drift.mp4" | grep -q "speed corrected" \
+  || { echo "align: expected a speed correction for the drifted track"; exit 1; }
 
 echo "demo output in $OUT:"
 echo "  walker.mp4            source video"
@@ -41,3 +49,4 @@ echo "  footsteps.wav         synced SFX track (import alongside walker.mp4)"
 echo "  steps.fcpxml          markers for Resolve/FCP import"
 echo "  walker-with-steps.mp4 video with the SFX track muxed in"
 echo "  realigned.mp4         0.4 s-delayed audio corrected back by \`align\`"
+echo "  realigned-drift.mp4   4%-fast (clock-drift) audio speed-corrected by align"
