@@ -145,7 +145,7 @@ pub impl Show for Timecode with fn output(self, logger) {
 
 ///|
 fn parse_part(part : StringView, input~ : String) -> Int raise TimecodeError {
-  let value : Int = @strconv.from_str(part) catch {
+  let value : Int = @parse.parse_int(part) catch {
     _ =>
       raise TimecodeError::InvalidTimecode(
         input~,

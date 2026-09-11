@@ -107,7 +107,7 @@ fn render_track(
   output_path : String,
   rate_str : String,
 ) -> Unit raise {
-  let sample_rate : Int = @strconv.from_str(rate_str) catch {
+  let sample_rate : Int = @parse.parse_int(rate_str) catch {
     _ => fail("invalid --rate \{rate_str}")
   }
   let sfx = @wav.WavData::parse(@fsio.read_bytes(sfx_path))
@@ -122,7 +122,7 @@ fn render_track(
 fn run_detect(m : @argparse.Matches) -> Unit raise {
   let path = required_value(m, "video")
   let out = required_value(m, "output")
-  let width : Int = @strconv.from_str(required_value(m, "width")) catch {
+  let width : Int = @parse.parse_int(required_value(m, "width")) catch {
     _ => fail("invalid --width")
   }
   let polarity : @vision.Polarity = if m.flags.get("dark") == Some(true) {
@@ -169,7 +169,7 @@ fn run_render(m : @argparse.Matches) -> Unit raise {
   }
   let duration = match optional_value(m, "duration") {
     Some(text) => {
-      let d : Double = @strconv.from_str(text) catch {
+      let d : Double = @parse.parse_double(text) catch {
         _ => fail("invalid --duration \{text}")
       }
       d

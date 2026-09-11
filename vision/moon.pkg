@@ -2,7 +2,7 @@ import {
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
-  "moonbitlang/core/strconv",
   "MaoDingA/moonfollow/internal/fsio",
+  "MaoDingA/moonfollow/internal/parse",
   "MaoDingA/moonfollow/track",
 }

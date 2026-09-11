@@ -30,10 +30,10 @@ fn fraction_to_double(
 ) -> Double raise VisionError {
   match text.split("/").to_array() {
     [num, den] => {
-      let n : Int = @strconv.from_str(num) catch {
+      let n : Int = @parse.parse_int(num) catch {
         _ => raise VisionError::ProbeFailed(path~, status=0)
       }
-      let d : Int = @strconv.from_str(den) catch {
+      let d : Int = @parse.parse_int(den) catch {
         _ => raise VisionError::ProbeFailed(path~, status=0)
       }
       n.to_double() / d.to_double()
@@ -75,7 +75,7 @@ pub fn probe(path : String) -> VideoInfo raise VisionError {
   }
   let nb_frames = match stream.nb_frames {
     Some(text) => {
-      let n : Int = @strconv.from_str(text) catch {
+      let n : Int = @parse.parse_int(text) catch {
         _ => raise VisionError::ProbeFailed(path~, status~)
       }
       Some(n)
