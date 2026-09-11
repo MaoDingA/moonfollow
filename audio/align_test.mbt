@@ -64,3 +64,64 @@ test "shift: delay and advance keep length and move the burst" {
   }
   inspect(any, content="false")
 }
+
+///|
+test "drift: clock-drifted audio recovers offset and slope" {
+  // audio runs 4% fast on the recorder clock: events land early by 0.04*v
+  let video = [0.8, 1.3, 1.8, 2.3, 2.8, 3.3, 3.8, 4.3, 4.8]
+  let audio = video.map(v => v - 0.04 * v + 0.1)
+  match @audio.estimate_offset(audio, video) {
+    Some(a) => {
+      if (a.offset_s - 0.1).abs() > 0.005 {
+        fail("offset \{a.offset_s}, want ~0.1")
+      }
+      if (a.drift - -0.04).abs() > 0.005 {
+        fail("drift \{a.drift}, want ~-0.04")
+      }
+      inspect(a.matched, content="9")
+    }
+    None => fail("no alignment found")
+  }
+}
+
+///|
+test "drift: noise below the significance gate stays constant" {
+  // residuals jitter ±20 ms around a constant with no trend; any slope
+  // fit is noise and must stay under the significance gate
+  let video = [0.8, 1.3, 1.8, 2.3, 2.8, 3.3, 3.8, 4.3, 4.8]
+  let audio = [0.9, 1.32, 1.82, 2.32, 2.78, 3.28, 3.82, 4.28, 4.78]
+  match @audio.estimate_offset(audio, video) {
+    Some(a) => {
+      inspect(a.drift == 0.0, content="true")
+      inspect(a.matched >= 8, content="true")
+    }
+    None => fail("no alignment found")
+  }
+}
+
+///|
+test "retime: drift=0 is a plain shift, drift moves a burst predictably" {
+  let sr = 1000
+  let samples : Array[Double] = Array::make(sr, 0.0)
+  for i in 500..<560 {
+    samples[i] = 0.8
+  }
+  let wav : @wav.WavData = { sample_rate: sr, channels: 1, samples, }
+  // positive offset = audio late: the correction moves content earlier,
+  // burst 0.5 s -> 0.3 s (shift() takes the negated amount, retime takes
+  // the model offset directly)
+  let shifted = @audio.retime(wav, offset_s=0.2, drift=0.0)
+  inspect((shifted.samples[300] - 0.8).abs() < 0.01, content="true")
+  // recorder 4% fast with a 0.1 s start offset: audio time 0.5 s belongs
+  // at (0.5 - 0.1) / 0.96 in the corrected timeline
+  let fast = @audio.retime(wav, offset_s=0.1, drift=-0.04)
+  let want_pos = ((0.5 - 0.1) / 0.96 * sr.to_double()).to_int()
+  let mut peak_at = -1
+  for i in 0..<fast.samples.length() {
+    if fast.samples[i] > 0.5 {
+      peak_at = i
+      break
+    }
+  }
+  inspect((peak_at - want_pos).abs() <= 2, content="true")
+}

@@ -11,6 +11,8 @@ pub fn detect_onsets(Array[Double], Int, channels? : Int, frame_s? : Double, thr
 
 pub fn estimate_offset(Array[Double], Array[Double], tolerance_s? : Double, max_search_s? : Double) -> Alignment?
 
+pub fn retime(@wav.WavData, offset_s~ : Double, drift~ : Double) -> @wav.WavData
+
 pub fn shift(@wav.WavData, Double) -> @wav.WavData
 
 // Errors
@@ -18,6 +20,7 @@ pub fn shift(@wav.WavData, Double) -> @wav.WavData
 // Types and methods
 pub(all) struct Alignment {
   offset_s : Double
+  drift : Double
   matched : Int
   tolerance_s : Double
 } derive(Eq, @debug.Debug)
