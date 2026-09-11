@@ -173,17 +173,25 @@ test "sub-frame: parabolic vertex refines the landing time" {
 /// rhythm -- and the pause must produce nothing.
 
 ///|
+/// Irregular gait: step gaps of 0.45/0.85/0.50 s, a 1.2 s standing pause,
+/// then 0.95/0.30/0.35 s -- no rhythm at all. Detection is period-free (a
+/// landing is the plateau start of each foot's own y series), so the exact
+/// landing frames must come back regardless of rhythm -- and the pause must
+/// produce nothing.
+
+///|
 fn irregular_walk() -> @track.FootTrack {
   let fps = 25.0
   let landings = [
-    ('L', 10),
-    ('R', 25),
-    ('L', 40),
-    ('R', 83),
-    ('L', 100),
-    ('R', 114),
-  ] // gaps: 0.6, 0.6, pause, 0.68, 0.56 s -- deliberately uneven
-  let swing = 8 // frames from lift to plant
+    ('L', 9),
+    ('R', 20),
+    ('L', 42),
+    ('R', 54),
+    ('L', 84),
+    ('R', 108),
+    ('L', 115),
+  ] // gaps: 0.45, 0.85, 0.50, pause(1.2 s), 0.95, 0.30 s
+  let swing = 9 // frames from lift to plant
   let frames : Array[@track.FrameRecord] = []
   for i in 0..<125 {
     let t = i.to_double() / fps
@@ -222,7 +230,13 @@ fn irregular_walk() -> @track.FootTrack {
 ///|
 test "irregular gait: exact landings, pause yields nothing" {
   let events = detect(irregular_walk())
-  debug_inspect(events.map(e => e.frame), content="[10, 25, 40, 83, 100, 114]")
+  debug_inspect(
+    events.map(e => e.frame),
+    content="[9, 20, 42, 54, 84, 108, 115]",
+  )
   let feet = events.map(e => if e.foot is Left { "L" } else { "R" })
-  debug_inspect(feet, content="[\"L\", \"R\", \"L\", \"R\", \"L\", \"R\"]")
+  debug_inspect(
+    feet,
+    content="[\"L\", \"R\", \"L\", \"R\", \"L\", \"R\", \"L\"]",
+  )
 }
