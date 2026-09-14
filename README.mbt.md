@@ -112,9 +112,14 @@ clip.mp4: 9 steps at 25 fps
 
 ```sh
 moon check            # 快速类型检查
-moon test             # 40 个黑盒快照测试
+moon test             # 48 个黑盒快照测试
 moon fmt && moon info # 提交前格式化并刷新 .mbti 接口
 ```
+
+集成测试素材库（`examples/fixtures.sh`，CI 全量执行）：20 个公式自带
+标准答案的场景——5 种帧率（含 29.97 丢帧时码断言）、慢/快步频、侧视
+左右向、三人同行、暗色行人自动极性、2 倍尺度、晚入场（T=2 才入画）、
+加噪、可变帧率拒绝。
 
 包结构：`vision/`（解码 + 足部跟踪）、`timecode/`（SMPTE 数学）、`track/`
 （轨迹模型）、`steps/`（落点检测）、`wav/`（RIFF 编解码）、`placement/`

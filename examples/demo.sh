@@ -56,16 +56,15 @@ moon run cmd/moonfollow -- run "$OUT/two-tracks.json" --sfx "$OUT/step.wav" -o "
   || { echo "multi: expected a mixed SFX track"; exit 1; }
 moon run cmd/moonfollow -- mux "$OUT/walker-two.mp4" "$OUT/two-footsteps.wav" -o "$OUT/two-with-steps.mp4" > /dev/null
 
-# profile-view demo: a walker crossing the frame sideways. The y signal does
-# not exist in profile view; --profile tracks the leading foot's x edge and
-# steps treats each dwell start as a landing (feet alternate by assumption)
-ffmpeg -v error -y \
-  -f lavfi -i "color=c=0x141414:s=200x90:r=25:d=6" \
-  -vf "geq=lum='if(between(X,54+18*T,71+18*T)*between(Y,30,59),200, if(between(X,56+18*T,61+18*T)*gte(Y,60)*lt(Y,88-28*abs(sin(PI*mod(T-0.55,0.9)))),200, if(between(X,66+18*T,71+18*T)*gte(Y,60)*lt(Y,88-28*abs(sin(PI*mod(T-0.10,0.9)))),200,20)))':cb=128:cr=128" \
+# profile-view demo: a sideways walker whose leading edge is a staircase
+# (ramps forward during each swing, dwells while planted); --profile reads
+# the dwell starts as landings, feet alternate by gait assumption
+ffmpeg -v error -y -f lavfi -i "color=c=0x141414:s=200x90:r=25:d=6" \
+  -vf "geq=lum='st(9,14*(max(floor((T-0.8)/0.9),-1)+1)+if(gt(T,0.9*(floor((T-0.8)/0.9)+1)+0.55),(T-(0.9*(floor((T-0.8)/0.9)+1)+0.55))*56,0));st(8,if(gt(T,0.9*(floor((T-0.8)/0.9)+1)+0.55),20*sin(PI*(T-(0.9*(floor((T-0.8)/0.9)+1)+0.55))*4),0));if(between(X,ld(9)-21,ld(9)-3)*between(Y,30,60),200, if(between(X,ld(9)-13,ld(9)-8)*gte(Y,60)*lte(Y,88),200, if(between(X,ld(9)-5,ld(9)-1)*gte(Y,60)*lt(Y,88-ld(8)),200,20)))':cb=128:cr=128" \
   -pix_fmt yuv420p -c:v libx264 "$OUT/walker-profile.mp4"
 moon run cmd/moonfollow -- detect "$OUT/walker-profile.mp4" --profile -o "$OUT/profile-edge.json" > /dev/null
-moon run cmd/moonfollow -- run "$OUT/profile-edge.json" --sfx "$OUT/step.wav" -o "$OUT/profile-steps.wav" | grep -q "steps" \
-  || { echo "profile: expected landings from the edge track"; exit 1; }
+moon run cmd/moonfollow -- run "$OUT/profile-edge.json" --sfx "$OUT/step.wav" -o "$OUT/profile-steps.wav" | grep -qE "[5-9] steps" \
+  || { echo "profile: expected ~6 landings from the edge track"; exit 1; }
 moon run cmd/moonfollow -- mux "$OUT/walker-profile.mp4" "$OUT/profile-steps.wav" -o "$OUT/profile-with-steps.mp4" > /dev/null
 
 echo "demo output in $OUT:"

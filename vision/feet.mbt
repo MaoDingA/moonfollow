@@ -37,6 +37,9 @@ pub(all) struct PersonTracker {
   mut center : Double // x center of the person's torso run
   mut last_left_x : Double // last known foot positions, for identity
   mut last_right_x : Double
+  mut cluster_a_x : Double // unanchored single-foot x cluster A (left slot)
+  mut cluster_b_x : Double // cluster B (right slot); -1 until a second
+  // distinct x appears
 }
 
 ///|
@@ -281,8 +284,44 @@ pub fn FeetDetector::process_frame_persons(
   // box height above ymin or the top of the swing turns invisible; the rows
   // up there are foreground-limited anyway (absorbed body = no fg)
   let region_top = if ymin - person_h > 0 { ymin - person_h } else { 0 }
+  // when the torso itself is foreground (its pixels never entered the
+  // background model, e.g. the person walked in after warmup), counting
+  // torso rows in the blob columns bridges the leg gap into one wide blob
+  // and dilutes visibility -- count only the leg region below the torso
+  // the torso is one wide contiguous run; two legs side by side are narrow
+  // separate runs, so measure the longest run, not the row total
+  let torso_slam = ymin + person_h / 4
+  let body_min = if w / 16 > 4 { w / 16 } else { 4 }
+  let mut body_present = false
+  if torso_slam < h {
+    let mut run = 0
+    let mut best_run = 0
+    for x in 0..<w {
+      let i = torso_slam * w + x
+      let v = frame[i].to_int().to_double()
+      if self.fg_diff(v, self.bg[i]) > threshold {
+        run = run + 1
+        if run > best_run {
+          best_run = run
+        }
+      } else {
+        run = 0
+      }
+    }
+    body_present = best_run >= body_min
+  }
+  let col_top = if body_present {
+    let tb = ymin + person_h / 2
+    if tb + 1 > region_top {
+      tb + 1
+    } else {
+      region_top
+    }
+  } else {
+    region_top
+  }
   let cols = FixedArray::make(w, 0)
-  for y in region_top..<=ymax {
+  for y in col_top..<=ymax {
     for x in xmin..<=xmax {
       let i = y * w + x
       let v = frame[i].to_int().to_double()
@@ -403,6 +442,8 @@ fn FeetDetector::person_for(
         center,
         last_left_x: -1.0,
         last_right_x: -1.0,
+        cluster_a_x: -1.0,
+        cluster_b_x: -1.0,
       }
       self.persons.push(p)
       (p.id, p)
@@ -422,11 +463,36 @@ fn name_feet(
 ) -> (@track.KeyPoint, @track.KeyPoint) {
   if b.v == 0.0 {
     // one foot: closer to last left or last right keeps its name. Without
-    // anchors nothing anchors identity yet: emit the foot in the left slot
-    // without recording an anchor, so a guessed name can never flip against
-    // the first real two-foot frame (left = smaller x there)
+    // anchors nothing anchors identity yet: strictly anti-phase gaits never
+    // show both feet planted, so anchor on alternation instead -- the single
+    // visible foot hops between two x positions (left leg, right leg), and a
+    // jump wider than 3% of the frame means the other foot took over. A real
+    // two-foot frame later replaces this with exact anchors.
     if state.last_left_x < 0.0 && state.last_right_x < 0.0 {
-      return (a, invisible)
+      // classify by nearest x cluster; the two feet of an anti-phase gait
+      // sit at two stable x positions, and merged transition frames fall
+      // harmlessly mid-swing. A real two-foot frame later replaces this
+      // with exact anchors.
+      if state.cluster_a_x < 0.0 {
+        state.cluster_a_x = a.x
+        return (a, invisible)
+      }
+      if state.cluster_b_x < 0.0 {
+        if (a.x - state.cluster_a_x).abs() > 0.03 {
+          state.cluster_b_x = a.x
+          return (invisible, a)
+        }
+        state.cluster_a_x = state.cluster_a_x * 0.9 + a.x * 0.1
+        return (a, invisible)
+      }
+      let da = (a.x - state.cluster_a_x).abs()
+      let db = (a.x - state.cluster_b_x).abs()
+      if da <= db {
+        state.cluster_a_x = state.cluster_a_x * 0.9 + a.x * 0.1
+        return (a, invisible)
+      }
+      state.cluster_b_x = state.cluster_b_x * 0.9 + a.x * 0.1
+      return (invisible, a)
     }
     let d_left = if state.last_left_x >= 0.0 {
       (a.x - state.last_left_x).abs()

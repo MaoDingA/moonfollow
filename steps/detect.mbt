@@ -110,10 +110,11 @@ fn detect_side(
   let n = ys.length()
   // Bridge short visibility dropouts (detector flicker on small or distant
   // feet): a run of invisible frames whose visible endpoints are at most
-  // ~0.1 s apart is filled by linear interpolation, so a landing plateau is
-  // not split in half by a single dropped frame.
-  let max_gap = (track.fps * 0.1).round().to_int()
-  let max_gap = if max_gap < 1 { 1 } else if max_gap > 4 { 4 } else { max_gap }
+  // ~0.2 s apart (the same scale as the same-foot debounce) is filled by
+  // linear interpolation, so the rise into a landing plateau is not cut by
+  // descent frames gating out at the visibility threshold
+  let max_gap = (track.fps * 0.2).round().to_int()
+  let max_gap = if max_gap < 2 { 2 } else if max_gap > 5 { 5 } else { max_gap }
   let mut i = 0
   while i < n {
     guard ys[i] is Some(_) else {

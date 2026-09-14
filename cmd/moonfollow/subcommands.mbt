@@ -248,12 +248,37 @@ fn load_tracks(path : String) -> Array[@track.FootTrack] raise {
 
 ///|
 fn edge_to_foot(edge : @track.EdgeTrack) -> @track.FootTrack {
+  // normalise the direction: the plateau-start rule needs the series to
+  // ASCEND into each dwell, so right-to-left walks (falling edge) are
+  // mirrored with y = 1 - x
+  let visible : Array[Double] = []
+  for s in edge.frames {
+    if s.v > 0.0 {
+      visible.push(s.x)
+    }
+  }
+  let mut invert = false
+  if visible.length() >= 10 {
+    let half = visible.length() / 2
+    let mut early = 0.0
+    for k in 0..<half {
+      early = early + visible[k]
+    }
+    let mut late = 0.0
+    for k in half..<visible.length() {
+      late = late + visible[k]
+    }
+    early = early / half.to_double()
+    late = late / (visible.length() - half).to_double()
+    invert = late < early
+  }
   let frames : Array[@track.FrameRecord] = []
   for s in edge.frames {
+    let y = if invert { 1.0 - s.x } else { s.x }
     frames.push({
       i: s.i,
       t: s.t,
-      left: { x: s.x, y: s.x, v: s.v, },
+      left: { x: s.x, y, v: s.v, },
       right: { x: 0.5, y: 1.0, v: 0.0, },
     })
   }

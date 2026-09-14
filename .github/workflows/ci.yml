@@ -22,3 +22,7 @@ jobs:
         run: |
           export PATH="$HOME/.moon/bin:$PATH"
           sh examples/demo.sh
+      - name: Fixture corpus (fps/cadence/profile/multi/polarity/scale/noise/VFR)
+        run: |
+          export PATH="$HOME/.moon/bin:$PATH"
+          sh examples/fixtures.sh

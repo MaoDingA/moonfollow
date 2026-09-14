@@ -205,29 +205,25 @@ pub fn detect_tracks(
       match polarity {
         Bright => (bright.0, bright.1, false)
         _ => {
-          // A bright-subject video also produces an inverted "ghost" track
-          // in the dark pass (the foreground's absence reads as dark fg), so
-          // the dark pass only wins when bright clearly fails and dark is
-          // substantially better: visible ratio >= 0.35 keeps bright, and a
-          // retry needs 1.5x the visible frames to switch. Ratio is judged
-          // on the dominant person's track.
-          let bright_ratio = dominant_ratio(bright.0)
-          if bright_ratio >= 0.35 {
-            (bright.0, bright.1, false)
+          // Both polarities can produce a high-presence "ghost" track on the
+          // wrong subject type (the subject's absence read as foreground),
+          // so presence alone cannot pick the pass. Score presence times
+          // oscillation instead: a real foot swings visibly through its
+          // stride, a ghost's y series is nearly flat.
+          let dark_pass = decode_and_track(
+            path,
+            src_width=info.width,
+            src_height=info.height,
+            fps=info.fps,
+            width~,
+            dark=true,
+          )
+          let bright_score = dominant_score(bright.0)
+          let dark_score = dominant_score(dark_pass.0)
+          if dark_score > bright_score {
+            (dark_pass.0, dark_pass.1, true)
           } else {
-            let dark_pass = decode_and_track(
-              path,
-              src_width=info.width,
-              src_height=info.height,
-              fps=info.fps,
-              width~,
-              dark=true,
-            )
-            if dominant_ratio(dark_pass.0) > bright_ratio * 1.5 {
-              (dark_pass.0, dark_pass.1, true)
-            } else {
-              (bright.0, bright.1, false)
-            }
+            (bright.0, bright.1, false)
           }
         }
       }
@@ -307,14 +303,72 @@ fn lerp_key(
 }
 
 ///|
-/// Visible ratio of the dominant track, 0 for an empty pass.
+/// Mean consecutive-frame |dy| of a foot over visible pairs: a real foot
+/// oscillates through its stride, a polarity-ghost track (the subject's
+/// absence read as foreground) barely moves. Max over both feet.
 
 ///|
-fn dominant_ratio(tracks : Array[@track.FootTrack]) -> Double {
+fn oscillation(track : @track.FootTrack) -> Double {
+  let mut best = 0.0
+  for foot in [0, 1] {
+    let mut total = 0.0
+    let mut n = 0
+    let mut prev : Double? = None
+    for f in track.frames {
+      let p = if foot == 0 { f.left } else { f.right }
+      if p.v >= 0.5 {
+        match prev {
+          Some(y0) => {
+            total = total + (p.y - y0).abs()
+            n = n + 1
+          }
+          None => ()
+        }
+        prev = Some(p.y)
+      } else {
+        prev = None
+      }
+    }
+    if n > 0 {
+      let mean = total / n.to_double()
+      if mean > best {
+        best = mean
+      }
+    }
+  }
+  best
+}
+
+///|
+/// Ghost-resistant pass score: presence times oscillation quality. A
+/// polarity ghost shows high presence but a nearly flat y series, so it
+/// scores near zero against the real subject pass.
+
+///|
+fn pass_score(track : @track.FootTrack) -> Double {
+  if track.frames.length() == 0 {
+    return 0.0
+  }
+  let quality = oscillation(track) / 0.02
+  let quality = if quality < 0.0 {
+    0.0
+  } else if quality > 1.0 {
+    1.0
+  } else {
+    quality
+  }
+  visible_ratio(track) * quality
+}
+
+///|
+/// Ghost-resistant score of the dominant track, 0 for an empty pass.
+
+///|
+fn dominant_score(tracks : Array[@track.FootTrack]) -> Double {
   if tracks.length() == 0 {
     return 0.0
   }
-  visible_ratio(tracks[0])
+  pass_score(tracks[0])
 }
 
 ///|

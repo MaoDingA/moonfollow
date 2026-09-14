@@ -191,13 +191,15 @@ pub fn EdgeDetector::process_frame(
   let x_norm = edge.to_double() / w.to_double()
   // direction lock from the drift between the first second and everything
   // after it
-  if self.early_n < 25 {
+  if self.early_n < 10 {
     self.early_sum = self.early_sum + x_norm
     self.early_n = self.early_n + 1
   } else {
     self.late_sum = self.late_sum + x_norm
     self.late_n = self.late_n + 1
-    if self.direction == 0 && self.late_n >= 25 {
+    // lock fast: before the lock the detector follows the trailing edge in
+    // right-to-left walks, and a mixed series ruins the first landings
+    if self.direction == 0 && self.late_n >= 10 {
       let drift = self.late_sum / self.late_n.to_double() -
         self.early_sum / self.early_n.to_double()
       if drift > 0.02 {
