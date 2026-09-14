@@ -25,26 +25,89 @@ fn decode_and_track(
 ) -> (Array[@track.FootTrack], Int) raise VisionError {
   let reader = FrameReader::open(path, src_width~, src_height~, width~)
   let detector = FeetDetector::new(reader.width, reader.height, dark~)
-  // frames_by_person[k] collects the frames of stable person id k; ids come
-  // from the detector's torso-run center matching, so a person briefly lost
-  // and refound appends to their own track
+  // frames_by_person[k] collects one record per frame for stable person id
+  // k (ids come from the detector's torso-run center matching, so a person
+  // briefly lost and refound appends to their own track). Absent frames are
+  // invisible placeholders; when the person reappears within `max_gap`
+  // frames the placeholder window is retro-interpolated between the last
+  // seen and the new keypoints, so the landing rise keeps its slope instead
+  // of being chopped and mistimed (small/distant feet flicker around the
+  // visibility gate).
   let frames_by_person : Array[Array[@track.FrameRecord]] = []
+  let pending_by_person : Array[Array[Int]] = [] // placeholder frame indices
   let heights : Array[Int] = []
   let mut frame_index = 0
+  let max_gap = 6
   while true {
     match reader.next_frame() {
       Some(frame) => {
-        for entry in detector.process_frame_persons(frame) {
+        let persons = detector.process_frame_persons(frame)
+        for k, frames in frames_by_person {
+          let pair : (Int, @track.KeyPoint, @track.KeyPoint)? = {
+            let mut found : (Int, @track.KeyPoint, @track.KeyPoint)? = None
+            for entry in persons {
+              if entry.0 == k {
+                found = Some(entry)
+                break
+              }
+            }
+            found
+          }
+          match pair {
+            Some((_, left, right)) => {
+              let pending = pending_by_person[k]
+              if pending.length() > 0 &&
+                pending.length() <= max_gap &&
+                frames.length() > 0 {
+                let last = frames[frames.length() - 1]
+                let span = frame_index - last.i
+                if span > 0 {
+                  let start_i = frames[0].i // one record per frame since then
+                  for idx in pending {
+                    let u = (idx - last.i).to_double() / span.to_double()
+                    frames[idx - start_i] = {
+                      i: idx,
+                      t: idx.to_double() / fps,
+                      left: lerp_key(last.left, left, u),
+                      right: lerp_key(last.right, right, u),
+                    }
+                  }
+                }
+              }
+              pending_by_person[k] = []
+              frames.push({
+                i: frame_index,
+                t: frame_index.to_double() / fps,
+                left,
+                right,
+              })
+            }
+            None => {
+              pending_by_person[k].push(frame_index)
+              frames.push({
+                i: frame_index,
+                t: frame_index.to_double() / fps,
+                left: { x: 0.5, y: 1.0, v: 0.0, },
+                right: { x: 0.5, y: 1.0, v: 0.0, },
+              })
+            }
+          }
+        }
+        // newly sighted persons start their track at this frame
+        for entry in persons {
           let (id, left, right) = entry
           while frames_by_person.length() <= id {
             frames_by_person.push([])
+            pending_by_person.push([])
           }
-          frames_by_person[id].push({
-            i: frame_index,
-            t: frame_index.to_double() / fps,
-            left,
-            right,
-          })
+          if frames_by_person[id].length() == 0 {
+            frames_by_person[id].push({
+              i: frame_index,
+              t: frame_index.to_double() / fps,
+              left,
+              right,
+            })
+          }
         }
         if detector.person_height() > 0 && frame_index % 10 == 0 {
           heights.push(detector.person_height())
@@ -216,6 +279,30 @@ pub fn detect_track(
     width: info.width,
     height: info.height,
     frames: [],
+  }
+}
+
+///|
+/// Linear interpolation between two keypoints; a foot invisible at either
+/// endpoint stays invisible through the fill (never invent a foot).
+
+///|
+fn lerp_key(
+  a : @track.KeyPoint,
+  b : @track.KeyPoint,
+  u : Double,
+) -> @track.KeyPoint {
+  if a.v <= 0.0 || b.v <= 0.0 {
+    return { x: 0.5, y: 1.0, v: 0.0, }
+  }
+  {
+    x: a.x + (b.x - a.x) * u,
+    y: a.y + (b.y - a.y) * u,
+    v: if a.v < b.v {
+      a.v
+    } else {
+      b.v
+    },
   }
 }
 
