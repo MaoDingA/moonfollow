@@ -11,6 +11,11 @@ fn build_command() -> @argparse.Command {
     ],
     flags=[
       @argparse.FlagArg::FlagArg(
+        "profile",
+        long="profile",
+        about="profile view: track the leading foot's x edge (landings are dwell starts)",
+      ),
+      @argparse.FlagArg::FlagArg(
         "multi",
         long="multi",
         about="detect every person, write a JSON array of per-person tracks",

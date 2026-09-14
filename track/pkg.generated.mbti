@@ -16,6 +16,23 @@ pub(all) suberror TrackError {
 pub impl Show for TrackError
 
 // Types and methods
+pub(all) struct EdgeSample {
+  i : Int
+  t : Double
+  x : Double
+  v : Double
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct EdgeTrack {
+  video : String
+  fps : Double
+  n_frames : Int
+  width : Int
+  height : Int
+  frames : Array[EdgeSample]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn EdgeTrack::parse(String) -> Self raise TrackError
+
 pub(all) struct FootTrack {
   video : String
   fps : Double

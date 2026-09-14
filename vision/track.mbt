@@ -316,3 +316,114 @@ fn dominant_ratio(tracks : Array[@track.FootTrack]) -> Double {
   }
   visible_ratio(tracks[0])
 }
+
+///|
+fn decode_edge(
+  path : String,
+  src_width~ : Int,
+  src_height~ : Int,
+  fps~ : Double,
+  width~ : Int,
+  dark? : Bool = false,
+) -> @track.EdgeTrack raise VisionError {
+  let reader = FrameReader::open(path, src_width~, src_height~, width~)
+  let detector = EdgeDetector::new(reader.width, reader.height, dark~)
+  let frames : Array[@track.EdgeSample] = []
+  let mut last_x = 0.5
+  while true {
+    match reader.next_frame() {
+      Some(frame) => {
+        let i = frames.length()
+        match detector.process_frame(frame) {
+          Some(x) => {
+            last_x = x
+            frames.push({ i, t: i.to_double() / fps, x, v: 1.0, })
+          }
+          None => frames.push({ i, t: i.to_double() / fps, x: last_x, v: 0.0, })
+        }
+      }
+      None => break
+    }
+  }
+  reader.finish()
+  {
+    video: path,
+    fps,
+    n_frames: frames.length(),
+    width: src_width,
+    height: src_height,
+    frames,
+  }
+}
+
+///|
+/// Profile-view detection: track the leading foot's x edge across the
+/// frame. Feed the resulting track to `steps` (the dwell-start rule is the
+/// same); foot labels alternate because profile view cannot tell the feet
+/// apart.
+
+///|
+pub fn detect_edge_track(
+  path : String,
+  width? : Int = 320,
+  polarity? : Polarity = Auto,
+) -> @track.EdgeTrack raise VisionError {
+  let info = probe(path)
+  fn presence(track : @track.EdgeTrack) -> Double {
+    if track.n_frames == 0 {
+      return 0.0
+    }
+    let mut seen = 0
+    for f in track.frames {
+      if f.v >= 0.5 {
+        seen = seen + 1
+      }
+    }
+    seen.to_double() / track.n_frames.to_double()
+  }
+  let bright = decode_edge(
+    path,
+    src_width=info.width,
+    src_height=info.height,
+    fps=info.fps,
+    width~,
+  )
+  match polarity {
+    Bright => bright
+    Dark => {
+      let (t, _) = (
+        decode_edge(
+          path,
+          src_width=info.width,
+          src_height=info.height,
+          fps=info.fps,
+          width~,
+          dark=true,
+        ),
+        0,
+      )
+      ignore(t)
+      t
+    }
+    _ => {
+      let bright_ratio = presence(bright)
+      if bright_ratio >= 0.35 {
+        bright
+      } else {
+        let dark_pass = decode_edge(
+          path,
+          src_width=info.width,
+          src_height=info.height,
+          fps=info.fps,
+          width~,
+          dark=true,
+        )
+        if presence(dark_pass) > bright_ratio * 1.5 {
+          dark_pass
+        } else {
+          bright
+        }
+      }
+    }
+  }
+}

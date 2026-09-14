@@ -71,6 +71,22 @@ fn load_and_detect(
     video = track.video
   }
   events.sort_by((a, b) => a.time.compare(b.time))
+  // profile view: alternate the feet (the edge signal has no foot identity)
+  if tracks.length() == 1 &&
+    tracks[0].frames.length() > 0 &&
+    tracks[0].frames[0].right.v == 0.0 {
+    let flipped : Array[@steps.StepEvent] = []
+    let mut turn = false // start with the left foot
+    for e in events {
+      let foot = if turn { @steps.Right } else { @steps.Left }
+      flipped.push({ ..e, foot, })
+      turn = !turn
+    }
+    events.clear()
+    for e in flipped {
+      events.push(e)
+    }
+  }
   if tracks.length() > 1 {
     println(
       "\{video}: \{tracks.length()} persons, \{events.length()} steps total at \{rate}",
@@ -160,6 +176,14 @@ fn run_detect(m : @argparse.Matches) -> Unit raise {
   } else {
     @vision.Auto
   }
+  if m.flags.get("profile") == Some(true) {
+    let edge = @vision.detect_edge_track(path, width~, polarity~)
+    @fsio.write_string(out, @json.to_json(edge).stringify())
+    println(
+      "wrote \{out}: leading-edge track, \{edge.n_frames} frames @ \{edge.fps} fps",
+    )
+    return
+  }
   if m.flags.get("multi") == Some(true) {
     let tracks = @vision.detect_tracks(path, width~, polarity~)
     @fsio.write_string(out, @json.to_json(tracks).stringify())
@@ -196,7 +220,50 @@ fn load_tracks(path : String) -> Array[@track.FootTrack] raise {
   if i < view.length() && view[i] == '[' {
     @json.from_json(@json.parse(text))
   } else {
+    // an edge track's samples carry "x"; a foot track's frames carry "left"
+    let is_edge = match @json.parse(text) {
+      Json::Object(m) =>
+        match m.get("frames") {
+          Some(Json::Array(items)) =>
+            match items[0] {
+              Json::Object(fm) => fm.contains("x") && !fm.contains("left")
+              _ => false
+            }
+          _ => false
+        }
+      _ => false
+    }
+    if is_edge {
+      return [edge_to_foot(@track.EdgeTrack::parse(text))]
+    }
     [@track.FootTrack::parse(text)]
+  }
+}
+
+///|
+/// Convert a leading-edge track into a foot track the steps engine can
+/// consume: the edge x plays the y role (a dwell start is the same
+/// plateau-start rule). The right foot stays invisible; foot labels get
+/// alternated afterwards because profile view cannot tell the feet apart.
+
+///|
+fn edge_to_foot(edge : @track.EdgeTrack) -> @track.FootTrack {
+  let frames : Array[@track.FrameRecord] = []
+  for s in edge.frames {
+    frames.push({
+      i: s.i,
+      t: s.t,
+      left: { x: s.x, y: s.x, v: s.v, },
+      right: { x: 0.5, y: 1.0, v: 0.0, },
+    })
+  }
+  {
+    video: edge.video,
+    fps: edge.fps,
+    n_frames: frames.length(),
+    width: edge.width,
+    height: edge.height,
+    frames,
   }
 }
 

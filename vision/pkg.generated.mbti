@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub fn detect_edge_track(String, width? : Int, polarity? : Polarity) -> @track.EdgeTrack raise VisionError
+
 pub fn detect_track(String, width? : Int, polarity? : Polarity) -> @track.FootTrack raise VisionError
 
 pub fn detect_tracks(String, width? : Int, polarity? : Polarity) -> Array[@track.FootTrack] raise VisionError
@@ -26,6 +28,21 @@ pub(all) suberror VisionError {
 pub impl Show for VisionError
 
 // Types and methods
+pub(all) struct EdgeDetector {
+  width : Int
+  height : Int
+  dark : Bool
+  bg : FixedArray[Double]
+  mut frames_seen : Int
+  mut direction : Int
+  mut early_sum : Double
+  mut early_n : Int
+  mut late_sum : Double
+  mut late_n : Int
+}
+pub fn EdgeDetector::new(Int, Int, dark? : Bool) -> Self
+pub fn EdgeDetector::process_frame(Self, Bytes) -> Double?
+
 pub(all) struct FeetDetector {
   width : Int
   height : Int

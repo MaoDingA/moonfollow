@@ -56,6 +56,18 @@ moon run cmd/moonfollow -- run "$OUT/two-tracks.json" --sfx "$OUT/step.wav" -o "
   || { echo "multi: expected a mixed SFX track"; exit 1; }
 moon run cmd/moonfollow -- mux "$OUT/walker-two.mp4" "$OUT/two-footsteps.wav" -o "$OUT/two-with-steps.mp4" > /dev/null
 
+# profile-view demo: a walker crossing the frame sideways. The y signal does
+# not exist in profile view; --profile tracks the leading foot's x edge and
+# steps treats each dwell start as a landing (feet alternate by assumption)
+ffmpeg -v error -y \
+  -f lavfi -i "color=c=0x141414:s=200x90:r=25:d=6" \
+  -vf "geq=lum='if(between(X,54+18*T,71+18*T)*between(Y,30,59),200, if(between(X,56+18*T,61+18*T)*gte(Y,60)*lt(Y,88-28*abs(sin(PI*mod(T-0.55,0.9)))),200, if(between(X,66+18*T,71+18*T)*gte(Y,60)*lt(Y,88-28*abs(sin(PI*mod(T-0.10,0.9)))),200,20)))':cb=128:cr=128" \
+  -pix_fmt yuv420p -c:v libx264 "$OUT/walker-profile.mp4"
+moon run cmd/moonfollow -- detect "$OUT/walker-profile.mp4" --profile -o "$OUT/profile-edge.json" > /dev/null
+moon run cmd/moonfollow -- run "$OUT/profile-edge.json" --sfx "$OUT/step.wav" -o "$OUT/profile-steps.wav" | grep -q "steps" \
+  || { echo "profile: expected landings from the edge track"; exit 1; }
+moon run cmd/moonfollow -- mux "$OUT/walker-profile.mp4" "$OUT/profile-steps.wav" -o "$OUT/profile-with-steps.mp4" > /dev/null
+
 echo "demo output in $OUT:"
 echo "  walker.mp4            source video"
 echo "  foottrack.json        per-frame foot positions"
@@ -65,3 +77,4 @@ echo "  walker-with-steps.mp4 video with the SFX track muxed in"
 echo "  realigned.mp4         0.4 s-delayed audio corrected back by \`align\`"
 echo "  realigned-drift.mp4   4%-fast (clock-drift) audio speed-corrected by align"
 echo "  two-with-steps.mp4    two walkers, per-person detection, one mixed SFX track"
+echo "  profile-with-steps.mp4 sideways walker, leading-edge landings, SFX synced"
