@@ -46,57 +46,85 @@ fn parse_foot(foot : String) -> @steps.FootSide raise {
 }
 
 ///|
-fn events_to_json(
-  events : Array[@steps.StepEvent],
-  rate : @timecode.FrameRate,
-) -> Array[Json] {
-  let out : Array[Json] = []
-  for e in events {
-    let tc = @timecode.Timecode::make(e.frame, rate~)
-    out.push({
-      "frame": e.frame,
-      "time": e.time,
-      "foot": if e.foot is Left {
-        "left"
-      } else {
-        "right"
-      },
-      "strength": e.strength,
-      "timecode": tc.display(),
-    })
-  }
-  out
-}
-
-///|
-/// Load a foottrack, detect landings, and print the timecode list.
-
-///|
 fn load_and_detect(
   path : String,
 ) -> (String, @timecode.FrameRate, Array[@steps.StepEvent], Double, String) raise {
-  let text = @fsio.read_string(path)
-  let track = @track.FootTrack::parse(text)
-  let rate = @timecode.FrameRate::of_double(track.fps)
-  let events = @steps.detect(track)
-  let last = track.frames[track.frames.length() - 1]
-  let duration = last.t + 1.0 / track.fps
-  println(
-    "\{track.video}: \{events.length()} steps at \{rate} (\{track.fps} fps source)",
-  )
+  let tracks = load_tracks(path)
+  if tracks.length() == 0 {
+    fail("no tracks in \{path}")
+  }
+  let rate = @timecode.FrameRate::of_double(tracks[0].fps)
+  let events : Array[@steps.StepEvent] = []
+  let mut duration = 0.0
+  let mut video = tracks[0].video
+  for k, track in tracks {
+    for e in @steps.detect(track) {
+      events.push(e)
+    }
+    if track.frames.length() > 0 {
+      let last = track.frames[track.frames.length() - 1]
+      let d = last.t + 1.0 / track.fps
+      if d > duration {
+        duration = d
+      }
+    }
+    video = track.video
+  }
+  events.sort_by((a, b) => a.time.compare(b.time))
+  if tracks.length() > 1 {
+    println(
+      "\{video}: \{tracks.length()} persons, \{events.length()} steps total at \{rate}",
+    )
+  } else {
+    println(
+      "\{video}: \{events.length()} steps at \{rate} (\{tracks[0].fps} fps source)",
+    )
+  }
   for e in events {
     let tc = @timecode.Timecode::make(e.frame, rate~)
     let foot = if e.foot is Left { "left " } else { "right" }
     let display = tc.display()
     println("\{display}  \{foot}  strength \{e.strength}  frame \{e.frame}")
   }
-  let doc : Json = {
-    "video": track.video,
-    "fps": track.fps,
-    "duration_s": duration,
-    "events": events_to_json(events, rate),
+  // (time, person, event) sorted by time, then rendered once
+  let tagged : Array[(Double, Int, @steps.StepEvent)] = []
+  for k, track in tracks {
+    for e in @steps.detect(track) {
+      tagged.push((e.time, k, e))
+    }
   }
-  (track.video, rate, events, duration, doc.stringify(indent=2))
+  tagged.sort_by((a, b) => a.0.compare(b.0))
+  let out_events : Array[Json] = []
+  for entry in tagged {
+    let (_, k, e) = entry
+    let tc = @timecode.Timecode::make(e.frame, rate~)
+    let foot_str : String = if e.foot is Left { "left" } else { "right" }
+    if tracks.length() > 1 {
+      out_events.push({
+        "frame": e.frame,
+        "time": e.time,
+        "foot": foot_str,
+        "strength": e.strength,
+        "timecode": tc.display(),
+        "person": k,
+      })
+    } else {
+      out_events.push({
+        "frame": e.frame,
+        "time": e.time,
+        "foot": foot_str,
+        "strength": e.strength,
+        "timecode": tc.display(),
+      })
+    }
+  }
+  let doc : Json = {
+    "video": video,
+    "fps": tracks[0].fps,
+    "duration_s": duration,
+    "events": out_events,
+  }
+  (video, rate, events, duration, doc.stringify(indent=2))
 }
 
 ///|
@@ -132,11 +160,44 @@ fn run_detect(m : @argparse.Matches) -> Unit raise {
   } else {
     @vision.Auto
   }
+  if m.flags.get("multi") == Some(true) {
+    let tracks = @vision.detect_tracks(path, width~, polarity~)
+    @fsio.write_string(out, @json.to_json(tracks).stringify())
+    println(
+      "wrote \{out}: \{tracks.length()} person track(s) @ \{tracks[0].fps} fps, \{tracks[0].width}x\{tracks[0].height}",
+    )
+    return
+  }
   let track = @vision.detect_track(path, width~, polarity~)
   @fsio.write_string(out, @json.to_json(track).stringify())
   println(
     "wrote \{out}: \{track.n_frames} frames @ \{track.fps} fps, \{track.width}x\{track.height}",
   )
+}
+
+///|
+/// Load one track or an array of per-person tracks (written by
+/// `detect --multi`).
+
+///|
+fn load_tracks(path : String) -> Array[@track.FootTrack] raise {
+  let text = @fsio.read_string(path)
+  let view = text[:]
+  let mut i = 0
+  while i < view.length() &&
+        (
+          view[i] == ' ' ||
+          view[i] == '\n' ||
+          view[i] == '\r' ||
+          view[i] == '\t'
+        ) {
+    i = i + 1
+  }
+  if i < view.length() && view[i] == '[' {
+    @json.from_json(@json.parse(text))
+  } else {
+    [@track.FootTrack::parse(text)]
+  }
 }
 
 ///|

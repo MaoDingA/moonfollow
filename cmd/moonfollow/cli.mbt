@@ -11,6 +11,11 @@ fn build_command() -> @argparse.Command {
     ],
     flags=[
       @argparse.FlagArg::FlagArg(
+        "multi",
+        long="multi",
+        about="detect every person, write a JSON array of per-person tracks",
+      ),
+      @argparse.FlagArg::FlagArg(
         "dark",
         long="dark",
         about="force dark-subject polarity instead of auto",

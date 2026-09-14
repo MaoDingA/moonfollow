@@ -96,3 +96,69 @@ test "feet: dark subject against bright background tracks the same feet" {
   inspect(left.v > 0.5, content="true")
   inspect(left.x < right.x, content="true")
 }
+
+///|
+/// Two walkers side by side: bodies at x[20,40) and x[110,130), legs under
+/// each, y in [30,60).
+
+///|
+fn two_walker_frame(
+  a_left : Int,
+  a_right : Int,
+  b_left : Int,
+  b_right : Int,
+) -> Bytes {
+  let w = 160
+  let h = 90
+  let buf = Buffer::Buffer()
+  for y in 0..<h {
+    for x in 0..<w {
+      let bright = (x >= 20 && x < 40 && y >= 30 && y < 60) ||
+        (x >= 110 && x < 130 && y >= 30 && y < 60) ||
+        (x >= 22 && x < 28 && y >= 60 && y < a_left) ||
+        (x >= 32 && x < 38 && y >= 60 && y < a_right) ||
+        (x >= 112 && x < 118 && y >= 60 && y < b_left) ||
+        (x >= 122 && x < 128 && y >= 60 && y < b_right)
+      buf.write_byte(if bright { b'\xc8' } else { b'\x14' })
+    }
+  }
+  buf.to_bytes()
+}
+
+///|
+test "feet: two separated walkers each track their own feet" {
+  let det = FeetDetector::new(160, 90)
+  // warmup with both standing (legs tucked)
+  for _ in 0..<13 {
+    ignore(det.process_frame(two_walker_frame(60, 60, 60, 60)))
+  }
+  // person A left foot planted (88), right lifted (78);
+  // person B right foot planted (86), left lifted (74)
+  let persons = det.process_frame_persons(two_walker_frame(88, 78, 74, 86))
+  inspect(persons.length(), content="2")
+  // left-to-right: person A first, person B second
+  let (_, a_left, a_right) = persons[0]
+  inspect((a_left.y - 87.0 / 90.0).abs() < 0.011, content="true")
+  inspect((a_right.y - 77.0 / 90.0).abs() < 0.011, content="true")
+  inspect(a_left.v > 0.5, content="true")
+  inspect(a_left.x < 0.3, content="true")
+  let (_, b_left, b_right) = persons[1]
+  inspect((b_right.y - 85.0 / 90.0).abs() < 0.011, content="true")
+  inspect((b_left.y - 73.0 / 90.0).abs() < 0.011, content="true")
+  inspect(b_right.v > 0.5, content="true")
+  inspect(b_left.x > 0.7, content="true")
+}
+
+///|
+test "feet: single walker still yields exactly one person" {
+  let det = FeetDetector::new(160, 90)
+  for _ in 0..<13 {
+    ignore(det.process_frame(walker_frame(60, 60)))
+  }
+  let persons = det.process_frame_persons(walker_frame(88, 80))
+  inspect(persons.length(), content="1")
+  // and the legacy single-person API agrees with the first entry
+  let (legacy_left, _) = det.process_frame(walker_frame(88, 80))
+  let (_, p_left, _) = persons[0]
+  inspect((legacy_left.y - p_left.y).abs() < 0.0001, content="true")
+}
