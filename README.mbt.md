@@ -19,6 +19,7 @@ video.mp4 --[detect]--> foottrack.json --[steps]--> 落点时码列表
 
 ```sh
 sh examples/demo.sh          # 自包含演示：ffmpeg 合成行走视频 + 脚步声，跑通全流程
+sh examples/showreel.sh      # 在 demo 之上拼一支 ~60s 带中文字幕的演示视频（macOS）
 ```
 
 ## 使用
