@@ -73,6 +73,8 @@ pub(all) struct PersonTracker {
   mut center : Double
   mut last_left_x : Double
   mut last_right_x : Double
+  mut cluster_a_x : Double
+  mut cluster_b_x : Double
 }
 
 pub(all) enum Polarity {

@@ -57,7 +57,7 @@ fn load_and_detect(
   let events : Array[@steps.StepEvent] = []
   let mut duration = 0.0
   let mut video = tracks[0].video
-  for k, track in tracks {
+  for _, track in tracks {
     for e in @steps.detect(track) {
       events.push(e)
     }
