@@ -28,14 +28,21 @@ fn median_of(values : Array[Double]) -> Double? {
 /// where the error grows over the take.
 ///
 /// Candidate offsets come from every (audio - video) pair inside the search
-/// bound; each candidate is scored by how many events it pairs within
-/// `tolerance_s`, and the winner is refined to the median residual of its
-/// pairs. Scoring rather than averaging makes the estimate immune to
+/// bound; each candidate is scored by how many events it pairs within the
+/// working tolerance, and the winner is refined to the median residual of
+/// its pairs. Scoring rather than averaging makes the estimate immune to
 /// spurious onsets (doors, music) and missed detections; the median kills
-/// any remaining outlier pairs. The drift is then the two-halves median
-/// slope of the residuals against video time, the offset is re-fitted at
-/// that slope over the same pairs, and matches are recounted against the
-/// full linear model. Slopes beyond ±10% are rejected as nonsense data.
+/// any remaining outlier pairs. The drift is then the least-squares slope
+/// of the residuals against video time over the same pairs, the offset is
+/// re-fitted at that slope, and matches are recounted against the full
+/// linear model. Slopes beyond ±10% are rejected as nonsense data.
+///
+/// The working tolerance tightens itself on dense landing grids (crowds):
+/// when the median inter-landing gap falls below ~2.2x the requested
+/// tolerance, every onset matches some landing at nearly any candidate
+/// offset and the score saturates, so pairings that only respect the
+/// grid's own resolution are allowed to count. The floor is 50 ms -- about
+/// one onset frame plus one video frame of combined timing precision.
 pub fn estimate_offset(
   audio_events : Array[Double],
   video_events : Array[Double],
@@ -44,6 +51,26 @@ pub fn estimate_offset(
 ) -> Alignment? {
   if audio_events.length() == 0 || video_events.length() == 0 {
     return None
+  }
+  let mut tolerance = tolerance_s
+  let sorted_v = video_events.copy()
+  sorted_v.sort()
+  let gaps : Array[Double] = []
+  for k in 1..<sorted_v.length() {
+    let g = sorted_v[k] - sorted_v[k - 1]
+    if g > 0.001 {
+      // ignore duplicate landing times reported for different persons
+      gaps.push(g)
+    }
+  }
+  match median_of(gaps) {
+    Some(g) => {
+      let cap = 0.45 * g
+      if cap < tolerance {
+        tolerance = if cap < 0.05 { 0.05 } else { cap }
+      }
+    }
+    None => ()
   }
   // candidate offsets; a real pairing repeats the same difference many
   // times, noise candidates land everywhere, so the best-scored candidate
@@ -67,7 +94,7 @@ pub fn estimate_offset(
     for a in audio_events {
       let mut hit = false
       for v in video_events {
-        if (a - v - d).abs() <= tolerance_s {
+        if (a - v - d).abs() <= tolerance {
           hit = true
           break
         }
@@ -97,12 +124,12 @@ pub fn estimate_offset(
     let mut best_v = 0.0
     for v in video_events {
       let r = a - v - best_d
-      if r.abs() <= tolerance_s && r.abs() < best.abs() {
+      if r.abs() <= tolerance && r.abs() < best.abs() {
         best = r
         best_v = v
       }
     }
-    if best.abs() <= tolerance_s {
+    if best.abs() <= tolerance {
       residuals.push(best)
       times.push(best_v)
     }
@@ -145,7 +172,7 @@ pub fn estimate_offset(
     if den > 0.000001 {
       let slope = num / den
       let span = t_max - t_min
-      if slope.abs() <= 0.1 && slope.abs() * span >= tolerance_s {
+      if slope.abs() <= 0.1 && slope.abs() * span >= tolerance {
         drift = slope
       }
     }
@@ -165,7 +192,7 @@ pub fn estimate_offset(
   for a in audio_events {
     let mut hit = false
     for v in video_events {
-      if (a - v - final_offset - drift * v).abs() <= tolerance_s {
+      if (a - v - final_offset - drift * v).abs() <= tolerance {
         hit = true
         break
       }
@@ -174,5 +201,5 @@ pub fn estimate_offset(
       matched = matched + 1
     }
   }
-  Some({ offset_s: final_offset, drift, matched, tolerance_s, })
+  Some({ offset_s: final_offset, drift, matched, tolerance_s: tolerance, })
 }

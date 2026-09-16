@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn detect_onsets(Array[Double], Int, channels? : Int, frame_s? : Double, threshold_ratio? : Double, min_gap_s? : Double) -> Array[Onset]
+pub fn detect_onsets(Array[Double], Int, channels? : Int, frame_s? : Double, threshold_ratio? : Double, min_gap_s? : Double, local_excess? : Double) -> Array[Onset]
 
 pub fn estimate_offset(Array[Double], Array[Double], tolerance_s? : Double, max_search_s? : Double) -> Alignment?
 

@@ -116,6 +116,20 @@ n=$(grep -o '"video"' "$OUT/three.json" | wc -l | tr -d ' ')
 got=$(steps_count "$OUT/three.json")
 [ "$got" -ge 25 ] && ok "three walkers: $got steps across persons" || fail "three" "only $got steps"
 
+# --------------------------------------------- noisy multi-person align
+# three walkers' footsteps delayed 0.4 s and buried in pink noise (fixed
+# seed): align must use every person's landings -- matching only the
+# dominant track against the mixed audio aliases to the inter-person phase
+# shift -- and the dense-grid tolerance must not saturate the score
+ffmpeg -v error -y -f lavfi -i "sine=frequency=160:duration=0.06,volume=0.6,afade=t=out:st=0.01:d=0.05" -acodec pcm_s16le -ac 1 "$OUT/step.wav"
+moon run cmd/moonfollow -- run "$OUT/three.json" --sfx "$OUT/step.wav" -o "$OUT/three-steps.wav" > /dev/null
+ffmpeg -v error -y -i "$OUT/three-steps.wav" -af "adelay=400" -acodec pcm_s16le "$OUT/three-late.wav"
+ffmpeg -v error -y -i "$OUT/three-late.wav" -f lavfi -i "anoisesrc=color=pink:amplitude=0.2:seed=42" -filter_complex "[0:a][1:a]amix=inputs=2:duration=first:normalize=0" -acodec pcm_s16le "$OUT/three-noisy.wav"
+moon run cmd/moonfollow -- mux "$OUT/walker-three.mp4" "$OUT/three-noisy.wav" -o "$OUT/three-noisy.mp4" > /dev/null
+out=$(moon run cmd/moonfollow -- align "$OUT/three-noisy.mp4" -o "$OUT/three-fixed.mp4" 2>&1)
+echo "$out" | grep -q "late by 39[0-9]\." && ok "noisy three-walker align: 0.4 s delay recovered from pink noise" \
+  || fail "noise-align" "offset line: $(echo "$out" | head -1)"
+
 # ------------------------------------------------------------------ polarity
 # dark walker on a bright street (photometric inverse of the base)
 ffmpeg -v error -y -f lavfi -i "color=c=0xc8c8c8:s=160x90:r=25:d=5" \

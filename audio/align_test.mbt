@@ -38,6 +38,32 @@ test "offset: unmatchable inputs yield None" {
 }
 
 ///|
+test "offset: dense crowd grid tightens tolerance instead of aliasing" {
+  // landings every 0.16 s (three interleaved walkers); audio carries the
+  // same landings delayed 0.4 s with +-30 ms jitter. At the default
+  // tolerance every onset matches some landing at nearly any offset and
+  // the winner collapses toward zero; the gap-derived tolerance must
+  // resolve the true 0.4 s shift.
+  let video : Array[Double] = []
+  let audio : Array[Double] = []
+  let mut t = 0.8
+  while t < 4.8 {
+    video.push(t)
+    audio.push(t + 0.4 + (t * 1000.0 % 7.0 - 3.0) / 100.0)
+    t = t + 0.16
+  }
+  match @audio.estimate_offset(audio, video) {
+    Some(a) => {
+      if (a.offset_s - 0.4).abs() > 0.02 {
+        fail("offset \{a.offset_s}, want ~0.4")
+      }
+      inspect(a.tolerance_s < 0.1, content="true")
+    }
+    None => fail("no alignment found")
+  }
+}
+
+///|
 test "shift: delay and advance keep length and move the burst" {
   let sr = 1000
   let samples : Array[Double] = Array::make(sr, 0.0)

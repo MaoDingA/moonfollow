@@ -60,3 +60,40 @@ test "onsets: stereo input times on the first channel" {
   let onsets = @audio.detect_onsets(stereo, sr, channels=2)
   inspect(onsets.length(), content="2")
 }
+
+///|
+/// Deterministic pseudo-noise: sin of an irrational-ish ramp looks like a
+/// flat broadband floor at 20 ms frame granularity.
+
+///|
+fn noise_floor(n : Int, amp : Double) -> Array[Double] {
+  let out : Array[Double] = Array::make(n, 0.0)
+  for i in 0..<n {
+    out[i] = amp * @math.sin((i.to_double() + 1.0) * 12.9898)
+  }
+  out
+}
+
+///|
+test "onsets: steady noise floor alone yields nothing" {
+  // loud flat noise (well above the global threshold relative to itself)
+  // has no local excess, so the detector stays silent
+  let samples = noise_floor(48000 * 4, 0.5)
+  inspect(@audio.detect_onsets(samples, 48000).length(), content="0")
+}
+
+///|
+test "onsets: footsteps picked out of a loud steady floor" {
+  let (steps, sr) = burst_track([0.5, 1.5, 2.5, 3.5])
+  let floor = noise_floor(steps.length(), 0.5)
+  for i in 0..<steps.length() {
+    steps[i] = steps[i] + floor[i]
+  }
+  let onsets = @audio.detect_onsets(steps, sr)
+  inspect(onsets.length(), content="4")
+  for k, want in [0.5, 1.5, 2.5, 3.5] {
+    if (onsets[k].time - want).abs() > 0.03 {
+      fail("onset \{k} at \{onsets[k].time}, want ~\{want}")
+    }
+  }
+}

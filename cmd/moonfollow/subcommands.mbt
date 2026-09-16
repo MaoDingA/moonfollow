@@ -454,9 +454,17 @@ fn extract_audio_wav(video : String) -> Bytes raise {
 fn run_align(m : @argparse.Matches) -> Unit raise {
   let video = required_value(m, "video")
   let out = required_value(m, "output")
-  // visual landings, sub-frame times
-  let track = @vision.detect_track(video)
-  let steps = @steps.detect(track)
+  // visual landings, sub-frame times; every person's landings, because the
+  // audio track mixes everyone's footsteps -- matching a single person's
+  // grid against the mix aliases to the inter-person phase shift
+  let tracks = @vision.detect_tracks(video)
+  let steps : Array[@steps.StepEvent] = []
+  for _, track in tracks {
+    for e in @steps.detect(track) {
+      steps.push(e)
+    }
+  }
+  steps.sort_by((a, b) => a.time.compare(b.time))
   if steps.length() == 0 {
     fail("no footstep landings detected in the video; nothing to align to")
   }
