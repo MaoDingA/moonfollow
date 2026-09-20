@@ -2,6 +2,10 @@
 
 根据画面中脚步的落点推算 SMPTE 时码，再把脚步声音效按这些时码合成为一条与视频同步的音轨。
 
+<video src="docs/showreel.mp4" controls muted width="640"></video>
+
+62 秒演示——自动配音 / 0.4s 错位修正 / 4% 时钟漂移修正 / 多人 / 侧视 / 不规律脚步。
+
 **项目代码 100% MoonBit**（native 后端）：从视频解码、足部跟踪、落点检测、
 时码换算到音频混音全部在 MoonBit 里实现。唯一的非 MoonBit 内容是
 MoonBit 官方 native FFI 约定所需的少量 C 胶水（`internal/fsio/stub.c`，
