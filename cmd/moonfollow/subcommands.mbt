@@ -50,17 +50,16 @@ fn load_and_detect(
   path : String,
 ) -> (String, @timecode.FrameRate, Array[@steps.StepEvent], Double, String) raise {
   let tracks = load_tracks(path)
-  if tracks.length() == 0 {
-    fail("no tracks in \{path}")
-  }
   let rate = @timecode.FrameRate::of_double(tracks[0].fps)
   let events : Array[@steps.StepEvent] = []
   let mut duration = 0.0
+  let mut frames_total = 0
   let mut video = tracks[0].video
   for _, track in tracks {
     for e in @steps.detect(track) {
       events.push(e)
     }
+    frames_total = frames_total + track.frames.length()
     if track.frames.length() > 0 {
       let last = track.frames[track.frames.length() - 1]
       let d = last.t + 1.0 / track.fps
@@ -71,6 +70,13 @@ fn load_and_detect(
     video = track.video
   }
   events.sort_by((a, b) => a.time.compare(b.time))
+  // frames without a single landing means detection found nothing usable:
+  // refuse instead of writing an empty steps JSON / a silent SFX track
+  if events.length() == 0 {
+    fail(
+      "\{path}: no footstep landings detected in \{frames_total} frames of track data (feet never seen landing?)",
+    )
+  }
   // profile view: alternate the feet (the edge signal has no foot identity)
   if tracks.length() == 1 &&
     tracks[0].frames.length() > 0 &&
@@ -187,9 +193,13 @@ fn run_detect(m : @argparse.Matches) -> Unit raise {
   if m.flags.get("multi") == Some(true) {
     let tracks = @vision.detect_tracks(path, width~, polarity~)
     @fsio.write_string(out, @json.to_json(tracks).stringify())
-    println(
-      "wrote \{out}: \{tracks.length()} person track(s) @ \{tracks[0].fps} fps, \{tracks[0].width}x\{tracks[0].height}",
-    )
+    if tracks.length() == 0 {
+      println("wrote \{out}: 0 person tracks (nobody detected)")
+    } else {
+      println(
+        "wrote \{out}: \{tracks.length()} person track(s) @ \{tracks[0].fps} fps, \{tracks[0].width}x\{tracks[0].height}",
+      )
+    }
     return
   }
   let track = @vision.detect_track(path, width~, polarity~)
@@ -201,7 +211,8 @@ fn run_detect(m : @argparse.Matches) -> Unit raise {
 
 ///|
 /// Load one track or an array of per-person tracks (written by
-/// `detect --multi`).
+/// `detect --multi`). The result is never empty and every track carries at
+/// least one frame; anything else fails with the file named.
 
 ///|
 fn load_tracks(path : String) -> Array[@track.FootTrack] raise {
@@ -218,25 +229,42 @@ fn load_tracks(path : String) -> Array[@track.FootTrack] raise {
     i = i + 1
   }
   if i < view.length() && view[i] == '[' {
-    @json.from_json(@json.parse(text))
+    let tracks : Array[@track.FootTrack] = @json.from_json(@json.parse(text)) catch {
+      err => fail("\{path}: not a valid multi-track JSON array (\{err})")
+    }
+    if tracks.length() == 0 {
+      fail("\{path}: track array is empty -- detect --multi found no person")
+    }
+    for k, track in tracks {
+      if track.frames.length() == 0 {
+        fail("\{path}: person track \{k} has 0 frames -- nobody was detected")
+      }
+    }
+    tracks
   } else {
-    // an edge track's samples carry "x"; a foot track's frames carry "left"
-    let is_edge = match @json.parse(text) {
-      Json::Object(m) =>
-        match m.get("frames") {
-          Some(Json::Array(items)) =>
-            match items[0] {
-              Json::Object(fm) => fm.contains("x") && !fm.contains("left")
-              _ => false
-            }
-          _ => false
-        }
-      _ => false
+    let json = @json.parse(text) catch {
+      err => fail("\{path}: not valid JSON (\{err})")
     }
-    if is_edge {
-      return [edge_to_foot(@track.EdgeTrack::parse(text))]
+    if json is Json::Object(m) && m.get("frames") is Some(Json::Array(items)) {
+      if items.length() == 0 {
+        fail(
+          "\{path}: track has 0 frames -- nobody was detected in the source video",
+        )
+      }
+      // an edge track's samples carry "x"; a foot track's frames carry "left"
+      if items[0] is Json::Object(fm) &&
+        fm.contains("x") &&
+        !fm.contains("left") {
+        return [
+          edge_to_foot(
+            @track.EdgeTrack::parse(text) catch {
+              err => fail("\{path}: \{err}")
+            },
+          ),
+        ]
+      }
     }
-    [@track.FootTrack::parse(text)]
+    [@track.FootTrack::parse(text) catch { err => fail("\{path}: \{err}") }]
   }
 }
 
@@ -306,11 +334,24 @@ fn run_steps(m : @argparse.Matches) -> Unit raise {
 }
 
 ///|
+/// Parse a steps JSON written by `steps -o`, naming the file on any error.
+
+///|
+fn load_steps_doc(path : String) -> StepsDoc raise {
+  let json = @json.parse(@fsio.read_string(path)) catch {
+    err => fail("\{path}: not a valid steps JSON (\{err})")
+  }
+  @json.from_json(json) catch {
+    err => fail("\{path}: not a valid steps JSON (\{err})")
+  }
+}
+
+///|
 fn run_render(m : @argparse.Matches) -> Unit raise {
   let path = required_value(m, "steps")
   let sfx_path = required_value(m, "sfx")
   let output_path = required_value(m, "output")
-  let doc : StepsDoc = @json.from_json(@json.parse(@fsio.read_string(path)))
+  let doc : StepsDoc = load_steps_doc(path)
   let events : Array[@steps.StepEvent] = []
   for e in doc.events {
     events.push({
@@ -364,7 +405,12 @@ fn run_export(m : @argparse.Matches) -> Unit raise {
   if format != "fcpxml" {
     fail("unknown --format '\{format}' (only fcpxml)")
   }
-  let doc : StepsDoc = @json.from_json(@json.parse(@fsio.read_string(path)))
+  let doc : StepsDoc = load_steps_doc(path)
+  // an FCPXML with no markers is never what the caller wants; fail loudly
+  // instead of writing an empty timeline (same policy as steps/run)
+  if doc.events.length() == 0 {
+    fail("\{path}: no step events in the steps JSON; nothing to export")
+  }
   let info = @vision.probe(doc.video)
   let rate = @timecode.FrameRate::of_double(doc.fps)
   let mut total = (doc.duration_s * doc.fps).round().to_int()

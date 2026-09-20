@@ -4,11 +4,25 @@
 #include <spawn.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 extern char **environ;
+
+// Write a NUL-terminated UTF-8 string to standard error. stderr is
+// unbuffered per C, so the line is visible immediately.
+MOONBIT_FFI_EXPORT
+void mf_eprint(const void *text) {
+  fputs((const char *)text, stderr);
+}
+
+// Terminate the process with an exit code.
+MOONBIT_FFI_EXPORT
+void mf_exit(int32_t code) {
+  exit((int)code);
+}
 
 // Read a whole file. Returns 0 on success (content in *out), errno on failure.
 MOONBIT_FFI_EXPORT

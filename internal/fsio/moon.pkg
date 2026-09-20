@@ -5,5 +5,9 @@ import {
 
 options(
   "native-stub": [ "stub.c" ],
-  targets: { "ffi.mbt": [ "native" ], "proc.mbt": [ "native" ] },
+  targets: {
+    "ffi.mbt": [ "native" ],
+    "proc.mbt": [ "native" ],
+    "stdio.mbt": [ "native" ],
+  },
 )

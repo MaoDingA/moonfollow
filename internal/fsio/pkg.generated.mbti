@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn eprint(String) -> Unit
+
+pub fn exit(Int) -> Unit
+
 pub fn read_bytes(String) -> Bytes raise FsError
 
 pub fn read_string(String) -> String raise FsError

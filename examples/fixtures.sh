@@ -180,4 +180,50 @@ else
   fail "vfr" "expected a variable-frame-rate rejection"
 fi
 
+# ------------------------------------------------------------ failure paths
+# a black video: detect finds nobody, so downstream commands must fail as
+# clean single-line errors -- nonzero exit, no PanicError stack. Both of
+# these used to abort with panics (load_tracks indexed an empty frames
+# array; align's failure escaped main as a panic).
+ffmpeg -v error -y -f lavfi -i color=c=0x141414:s=160x90:r=25:d=3 -pix_fmt yuv420p -c:v libx264 "$OUT/black.mp4" 2>/dev/null
+moon run cmd/moonfollow -- detect "$OUT/black.mp4" -o "$OUT/black.json" > /dev/null
+moon run cmd/moonfollow -- detect "$OUT/black.mp4" --multi -o "$OUT/black-multi.json" > /dev/null
+[ "$(cat "$OUT/black-multi.json")" = "[]" ] && ok "black video multi detect: empty track array, no panic" \
+  || fail "black-multi" "expected [], got $(cat "$OUT/black-multi.json")"
+st=0; err=$(moon run cmd/moonfollow -- run "$OUT/black.json" --sfx "$OUT/step.wav" -o "$OUT/black-steps.wav" 2>&1) || st=$?
+if [ "$st" -ne 0 ] && ! echo "$err" | grep -q PanicError && echo "$err" | grep -qi "0 frames"; then
+  ok "black video run: clean failure, exit $st"
+else
+  fail "black-run" "exit $st, output: $err"
+fi
+ffmpeg -v error -y -f lavfi -i anullsrc=r=48000:cl=stereo:d=3 -i "$OUT/black.mp4" -c:v copy -c:a aac -shortest "$OUT/black-a.mp4" 2>/dev/null
+st=0; err=$(moon run cmd/moonfollow -- align "$OUT/black-a.mp4" -o "$OUT/black-fixed.mp4" 2>&1) || st=$?
+if [ "$st" -ne 0 ] && ! echo "$err" | grep -q PanicError && echo "$err" | grep -qi "no footstep landings"; then
+  ok "black video align: clean failure, exit $st"
+else
+  fail "black-align" "exit $st, output: $err"
+fi
+
+# static feet: a track with frames but no landing (y never rises into a
+# plateau) must be refused, not rendered as a silent SFX track / empty export
+awk 'BEGIN {
+  printf "{\"video\":\"static\",\"fps\":25,\"n_frames\":30,\"width\":160,\"height\":90,\"frames\":["
+  for (i = 0; i < 30; i++)
+    printf "%s{\"i\":%d,\"t\":%.4f,\"left\":{\"x\":0.45,\"y\":0.95,\"v\":1},\"right\":{\"x\":0.55,\"y\":0.95,\"v\":1}}", (i ? "," : ""), i, i / 25
+  print "]}"
+}' > "$OUT/static.json"
+st=0; err=$(moon run cmd/moonfollow -- run "$OUT/static.json" --sfx "$OUT/step.wav" -o "$OUT/static-steps.wav" 2>&1) || st=$?
+if [ "$st" -ne 0 ] && ! echo "$err" | grep -q PanicError && echo "$err" | grep -qi "no footstep landings detected in 30 frames"; then
+  ok "static feet run: 0 steps refused cleanly, exit $st"
+else
+  fail "static-run" "exit $st, output: $err"
+fi
+printf '{"video":"none","fps":25,"duration_s":1.2,"events":[]}' > "$OUT/empty-steps.json"
+st=0; err=$(moon run cmd/moonfollow -- export "$OUT/empty-steps.json" -o "$OUT/empty.fcpxml" 2>&1) || st=$?
+if [ "$st" -ne 0 ] && ! echo "$err" | grep -q PanicError && echo "$err" | grep -qi "no step events"; then
+  ok "empty steps export: refused cleanly, exit $st"
+else
+  fail "empty-export" "exit $st, output: $err"
+fi
+
 echo "fixtures: $PASS cases passed in $OUT"
