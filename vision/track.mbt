@@ -229,7 +229,11 @@ pub fn detect_tracks(
       }
     }
   }
-  if median_h >= 100 || width >= 1280 {
+  // median_h == 0 means nobody was detected (empty heights); widening the
+  // decode cannot help then, and -- critically on x86_64 -- the scale
+  // computation below would divide by zero (arm64 integer division
+  // silently yields 0, which is why this only ever crashed on CI)
+  if median_h <= 0 || median_h >= 100 || width >= 1280 {
     return tracks
   }
   let scaled = width * 100 / median_h
