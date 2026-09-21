@@ -23,7 +23,10 @@ pub(all) struct Alignment {
   drift : Double
   matched : Int
   tolerance_s : Double
+  median_abs_residual_s : Double
 } derive(Eq, @debug.Debug)
+pub fn Alignment::passes_confidence_gate(Self, Int, min_match_ratio? : Double, residual_factor? : Double, residual_floor_s? : Double) -> Bool
+pub fn Alignment::residual_limit_s(Self, residual_factor? : Double, residual_floor_s? : Double) -> Double
 
 pub(all) struct Onset {
   time : Double

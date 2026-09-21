@@ -64,6 +64,64 @@ test "offset: dense crowd grid tightens tolerance instead of aliasing" {
 }
 
 ///|
+test "confidence gate: scattered forced pairing is refused (5/7, 40 ms)" {
+  // mismatched material still yields an offset: 5 of 7 onsets find a
+  // landing near a common candidate, but the coincidences scatter across
+  // the tolerance band instead of hugging one line -- exactly the
+  // slow-audio-vs-fast-video fake fix the gate exists to refuse
+  let video = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+  let audio = [1.25, 2.29, 3.21, 4.33, 5.2, 7.4, 7.6]
+  match @audio.estimate_offset(audio, video) {
+    Some(a) => {
+      inspect(a.matched, content="5")
+      inspect(
+        (a.median_abs_residual_s - 0.04).abs() < 0.0000001,
+        content="true",
+      )
+      inspect(a.passes_confidence_gate(audio.length()), content="false")
+    }
+    None => fail("expected a forced (bad) alignment to exist")
+  }
+}
+
+///|
+test "confidence gate: mostly unpaired onsets are refused (2/7)" {
+  // only 2 of 7 onsets ever land near the grid: the ratio gate rejects
+  // before the residuals even matter (the slow-audio-vs-profile-view case)
+  let video = [0.8, 1.8, 2.8, 3.8]
+  let audio = [0.8, 1.8, 3.1, 4.3, 5.0, 5.4, 5.9]
+  match @audio.estimate_offset(audio, video) {
+    Some(a) => {
+      inspect(a.matched, content="2")
+      inspect(a.passes_confidence_gate(audio.length()), content="false")
+    }
+    None => fail("expected a forced (bad) alignment to exist")
+  }
+}
+
+///|
+test "confidence gate: dense grid with tightened tolerance passes" {
+  // landings every 0.16 s (three interleaved walkers), audio delayed 0.4 s
+  // with +-30 ms onset jitter: the adaptive tolerance tightens to 72 ms and
+  // the 30 ms residual floor keeps the clean pairing accepted
+  let video : Array[Double] = []
+  let audio : Array[Double] = []
+  let mut t = 0.8
+  while t < 4.8 {
+    video.push(t)
+    audio.push(t + 0.4 + (t * 1000.0 % 7.0 - 3.0) / 100.0)
+    t = t + 0.16
+  }
+  match @audio.estimate_offset(audio, video) {
+    Some(a) => {
+      inspect(a.tolerance_s < 0.1, content="true")
+      inspect(a.passes_confidence_gate(audio.length()), content="true")
+    }
+    None => fail("no alignment found")
+  }
+}
+
+///|
 test "shift: delay and advance keep length and move the burst" {
   let sr = 1000
   let samples : Array[Double] = Array::make(sr, 0.0)

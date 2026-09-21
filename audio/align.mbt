@@ -7,6 +7,7 @@ pub(all) struct Alignment {
   drift : Double // extra lag per second of video (clock drift / speed error)
   matched : Int // events paired within tolerance
   tolerance_s : Double
+  median_abs_residual_s : Double // spread of the matched pairs around the final linear model
 } derive(Debug, Eq)
 
 ///|
@@ -35,7 +36,10 @@ fn median_of(values : Array[Double]) -> Double? {
 /// any remaining outlier pairs. The drift is then the least-squares slope
 /// of the residuals against video time over the same pairs, the offset is
 /// re-fitted at that slope, and matches are recounted against the full
-/// linear model. Slopes beyond ±10% are rejected as nonsense data.
+/// linear model. Slopes beyond ±10% are rejected as nonsense data. The
+/// result also carries the median absolute residual of the matched pairs
+/// around the final model, consumed by the confidence gate
+/// (`Alignment::passes_confidence_gate`).
 ///
 /// The working tolerance tightens itself on dense landing grids (crowds):
 /// when the median inter-landing gap falls below ~2.2x the requested
@@ -201,5 +205,88 @@ pub fn estimate_offset(
       matched = matched + 1
     }
   }
-  Some({ offset_s: final_offset, drift, matched, tolerance_s: tolerance, })
+  // residual concentration on the same final model: the per-audio-event
+  // smallest |a - v - offset - drift * v| among the pairs that count as
+  // matched, reduced to its median. A true pairing hugs the model line
+  // (median near zero); a forced pairing of mismatched material spreads its
+  // few coincidental hits across the tolerance band.
+  let final_abs : Array[Double] = []
+  for a in audio_events {
+    let mut best = 1000000000.0
+    for v in video_events {
+      let r = (a - v - final_offset - drift * v).abs()
+      if r <= tolerance && r < best {
+        best = r
+      }
+    }
+    if best <= tolerance {
+      final_abs.push(best)
+    }
+  }
+  let median_abs_residual = match median_of(final_abs) {
+    Some(m) => m
+    None => 0.0
+  }
+  Some({
+    offset_s: final_offset,
+    drift,
+    matched,
+    tolerance_s: tolerance,
+    median_abs_residual_s: median_abs_residual,
+  })
+}
+
+///|
+/// The largest median |residual| the confidence gate accepts: the given
+/// fraction of the working tolerance, never below `residual_floor_s`.
+pub fn Alignment::residual_limit_s(
+  self : Alignment,
+  residual_factor? : Double = 0.32,
+  residual_floor_s? : Double = 0.03,
+) -> Double {
+  let allowed = residual_factor * self.tolerance_s
+  if allowed > residual_floor_s {
+    allowed
+  } else {
+    residual_floor_s
+  }
+}
+
+///|
+/// Confidence gate for an alignment: enough onsets must pair, and the pairs
+/// must hug the fitted line, before the estimate is trusted enough to move
+/// audio. Reject when either
+///
+/// - fewer than `min_match_ratio` of the onsets paired (most onsets belong
+///   to events the video never shows -- wrong take, or audio dominated by
+///   non-footstep transients), or
+/// - the median |residual| exceeds `residual_factor` of the working
+///   tolerance -- a forced pairing of mismatched material scatters its few
+///   coincidental hits across the tolerance band instead of hugging the
+///   line. The `residual_floor_s` (30 ms) keeps dense landing grids from
+///   being over-scrutinised: their adaptive tolerance already tightened to
+///   the grid resolution, and 0.32x of a ~74 ms tolerance would demand more
+///   precision than one audio frame plus one video frame can carry.
+///
+/// Calibrated so that clean pairings pass (matched ratios 1.0 down to 0.9
+/// with median |residual| at frame precision, measured <= 7 ms) while
+/// slow-audio-vs-fast-video (5/7 matched, median |residual| 33.3 ms on the
+/// final model at tolerance 100 ms -- 0.32 x 100 = 32 ms refuses it) and
+/// slow-audio-vs-profile-view (2/7) are rejected. 0.35 would let the 5/7
+/// mismatch through: the refined final model concentrates the forced pairs
+/// below the raw candidate-pairing residual of 40 ms.
+pub fn Alignment::passes_confidence_gate(
+  self : Alignment,
+  onset_total : Int,
+  min_match_ratio? : Double = 0.6,
+  residual_factor? : Double = 0.32,
+  residual_floor_s? : Double = 0.03,
+) -> Bool {
+  if onset_total <= 0 {
+    return false
+  }
+  let ratio = self.matched.to_double() / onset_total.to_double()
+  ratio >= min_match_ratio &&
+  self.median_abs_residual_s <=
+  self.residual_limit_s(residual_factor~, residual_floor_s~)
 }

@@ -226,4 +226,27 @@ else
   fail "empty-export" "exit $st, output: $err"
 fi
 
+# ------------------------------------------------ mismatched material (gate)
+# pairing the WRONG take's audio with a video used to produce a confident
+# fake fix: slow-walk audio over the fast-walk video finds a 280 ms "offset"
+# matching 5/7 onsets with residuals scattered across the tolerance band;
+# over the profile video it matches 2/7. The confidence gate must refuse
+# both -- nonzero exit, single-line stderr naming the counts and residuals,
+# no panic.
+moon run cmd/moonfollow -- run "$OUT/slow.json" --sfx "$OUT/step.wav" -o "$OUT/slow-footsteps.wav" > /dev/null
+ffmpeg -v error -y -i "$OUT/fast.mp4" -i "$OUT/slow-footsteps.wav" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k "$OUT/mismatch-fast.mp4" 2>/dev/null
+st=0; err=$(moon run cmd/moonfollow -- align "$OUT/mismatch-fast.mp4" -o "$OUT/mismatch-fast-fixed.mp4" 2>&1) || st=$?
+if [ "$st" -ne 0 ] && ! echo "$err" | grep -q PanicError && echo "$err" | grep -qi "different takes"; then
+  ok "mismatched audio vs fast video: refused (was a confident fake 280 ms fix at 5/7)"
+else
+  fail "mismatch-fast" "exit $st, output: $err"
+fi
+ffmpeg -v error -y -i "$OUT/profile-ltr.mp4" -i "$OUT/slow-footsteps.wav" -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k "$OUT/mismatch-profile.mp4" 2>/dev/null
+st=0; err=$(moon run cmd/moonfollow -- align "$OUT/mismatch-profile.mp4" -o "$OUT/mismatch-profile-fixed.mp4" 2>&1) || st=$?
+if [ "$st" -ne 0 ] && ! echo "$err" | grep -q PanicError && echo "$err" | grep -qi "different takes"; then
+  ok "mismatched audio vs profile video: refused (was a fake 40 ms fix at 2/7)"
+else
+  fail "mismatch-profile" "exit $st, output: $err"
+fi
+
 echo "fixtures: $PASS cases passed in $OUT"

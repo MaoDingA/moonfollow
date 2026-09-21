@@ -534,6 +534,16 @@ fn run_align(m : @argparse.Matches) -> Unit raise {
         "could not align: \{audio_times.length()} onsets vs \{video_times.length()} landings, no consistent offset",
       )
     Some(a) => {
+      // confidence gate: a forced pairing of mismatched material still
+      // yields an offset, but one built on few, scattered coincidences.
+      // Better to refuse than to confidently apply a fake correction.
+      if !a.passes_confidence_gate(audio_times.length()) {
+        let limit_ms = (a.residual_limit_s() * 1000.0).round()
+        let residual_ms = (a.median_abs_residual_s * 1000.0).round()
+        fail(
+          "could not align: matched \{a.matched}/\{audio_times.length()} onsets (needs >= 60%), median |residual| \{residual_ms} ms (allowed \{limit_ms} ms) -- audio and video look like different takes; refusing to force-sync mismatched material",
+        )
+      }
       // meaningful drift (>= one tolerance accumulated) needs a speed
       // correction through interpolation; otherwise the sample-exact shift
       // is strictly better
